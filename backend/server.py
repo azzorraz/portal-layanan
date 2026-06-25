@@ -207,6 +207,23 @@ DEFAULT_FORM_SCHEMAS = {
 }
 
 
+# Keys that must always be optional (not required) — per spec
+OPTIONAL_FIELD_KEYS = {"nip", "nik", "nuptk", "nip_gtk", "nik_gtk"}
+
+
+def _normalize_schema(schema: list) -> list:
+    """Mutate schema: ensure NIP/NIK/NUPTK fields are non-required."""
+    for f in schema:
+        if isinstance(f, dict) and f.get("key") in OPTIONAL_FIELD_KEYS:
+            f["required"] = False
+    return schema
+
+
+# Apply normalization to default schemas at import time
+for _nama, _sch in DEFAULT_FORM_SCHEMAS.items():
+    _normalize_schema(_sch)
+
+
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -281,6 +298,7 @@ class LayananIn(BaseModel):
     deskripsi: Optional[str] = None
     checklist: List[str] = []
     form_schema: List[FormField] = []
+    attachment_required: bool = False
 
 
 class AttachmentIn(BaseModel):
@@ -768,6 +786,8 @@ async def create_ticket(payload: TicketCreate, user: dict = Depends(get_current_
     layanan = await db.services.find_one({"_id": ObjectId(payload.layanan_id)})
     if not layanan:
         raise HTTPException(status_code=404, detail="Jenis layanan tidak ditemukan")
+    if layanan.get("attachment_required") and not payload.attachments:
+        raise HTTPException(status_code=400, detail="Layanan ini wajib menyertakan lampiran dokumen (SK/KTP).")
     sekolah = None
     if user.get("sekolah_id"):
         sekolah = await db.sekolah.find_one({"_id": ObjectId(user["sekolah_id"])})
@@ -1890,21 +1910,35 @@ async def seed():
             await db.kecamatan.insert_one({"nama": k, "created_at": iso(now_utc())})
 
     # services
-    for nama, sla, checklist in DEFAULT_SERVICES:
+    for nama, sla, checklist, attachment_required in DEFAULT_SERVICES:
         existing = await db.services.find_one({"nama": nama})
         form_schema = DEFAULT_FORM_SCHEMAS.get(nama, [])
         if not existing:
             await db.services.insert_one({
                 "nama": nama, "sla_days": sla, "deskripsi": None,
                 "checklist": checklist, "form_schema": form_schema,
+                "attachment_required": attachment_required,
                 "created_at": iso(now_utc()),
             })
         else:
             updates: dict = {}
             if "checklist" not in existing:
                 updates["checklist"] = checklist
-            if not existing.get("form_schema"):
+            # normalize existing schema: NIP/NIK/NUPTK must be optional
+            existing_schema = existing.get("form_schema") or []
+            if not existing_schema:
                 updates["form_schema"] = form_schema
+            else:
+                changed = False
+                for f in existing_schema:
+                    if isinstance(f, dict) and f.get("key") in OPTIONAL_FIELD_KEYS and f.get("required"):
+                        f["required"] = False
+                        changed = True
+                if changed:
+                    updates["form_schema"] = existing_schema
+            # enforce attachment_required per default spec if not set or mismatched with defaults
+            if "attachment_required" not in existing:
+                updates["attachment_required"] = attachment_required
             if updates:
                 await db.services.update_one({"_id": existing["_id"]}, {"$set": updates})
 

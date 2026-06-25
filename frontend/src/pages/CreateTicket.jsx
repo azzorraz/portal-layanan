@@ -52,12 +52,18 @@ export default function CreateTicket() {
   const [checklistState, setChecklistState] = useState([]);
   const [formData, setFormData] = useState({});
 
+  // Readonly prefill — values shown disabled (auto-filled from account)
   const prefill = useMemo(() => ({
     nama_sekolah: user?.sekolah?.nama || "",
-    nama_operator: user?.name || "",
     npsn: user?.sekolah?.npsn || "",
     npsn_npyp: user?.sekolah?.npsn || "",
   }), [user]);
+
+  // Initial seed values — populated but editable (e.g., Nama Operator)
+  const initialValues = useMemo(() => ({
+    ...prefill,
+    nama_operator: user?.name || "",
+  }), [prefill, user]);
 
   useEffect(() => {
     if (selectedLayanan?.checklist?.length) {
@@ -65,16 +71,16 @@ export default function CreateTicket() {
     } else {
       setChecklistState([]);
     }
-    // seed form_data with prefill keys present in schema
+    // seed form_data with initial values for any matching schema key
     const schema = selectedLayanan?.form_schema || [];
     const seeded = {};
     for (const f of schema) {
-      if (prefill[f.key] !== undefined && prefill[f.key] !== "") {
-        seeded[f.key] = prefill[f.key];
+      if (initialValues[f.key] !== undefined && initialValues[f.key] !== "") {
+        seeded[f.key] = initialValues[f.key];
       }
     }
     setFormData(seeded);
-  }, [layananId, selectedLayanan, prefill]);
+  }, [layananId, selectedLayanan, initialValues]);
 
   const toggleChecklist = (i) => {
     setChecklistState((prev) => prev.map((c, idx) => (idx === i ? { ...c, checked: !c.checked } : c)));
@@ -95,6 +101,10 @@ export default function CreateTicket() {
     if (!layananId) { toast.error("Pilih jenis layanan"); return; }
     if (!judul.trim()) { toast.error("Judul pengajuan wajib diisi"); return; }
     if (!deskripsi.trim()) { toast.error("Deskripsi wajib diisi"); return; }
+    if (selectedLayanan?.attachment_required && files.length === 0) {
+      toast.error("Layanan ini wajib menyertakan lampiran dokumen (SK/KTP).");
+      return;
+    }
     // validate required form fields from schema
     const schema = selectedLayanan?.form_schema || [];
     for (const f of schema) {
@@ -216,7 +226,15 @@ export default function CreateTicket() {
           </div>
 
           <div>
-            <Label className="text-xs uppercase tracking-wider text-zinc-500">Lampiran Dokumen</Label>
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">
+              Lampiran Dokumen
+              {selectedLayanan?.attachment_required && <span className="text-red-500 ml-0.5">*</span>}
+            </Label>
+            {selectedLayanan?.attachment_required && (
+              <div className="text-[11px] text-red-600 mt-0.5" data-testid="attachment-required-hint">
+                Wajib unggah lampiran (SK & KTP) untuk jenis layanan ini.
+              </div>
+            )}
             <div className="mt-1 border-2 border-dashed border-zinc-200 rounded-md p-4 text-center hover:border-zinc-300 transition-colors">
               <input id="file-upload" type="file" multiple accept=".pdf,.jpg,.jpeg,.png" onChange={onFiles} className="hidden" data-testid="input-file" />
               <label htmlFor="file-upload" className="cursor-pointer text-sm text-zinc-600 inline-flex items-center gap-2">

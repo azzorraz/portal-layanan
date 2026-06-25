@@ -71,15 +71,15 @@ function KecamatanTab() {
 function LayananTab() {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nama: "", sla_days: 3, deskripsi: "", checklist: [], form_schema: [] });
+  const [form, setForm] = useState({ nama: "", sla_days: 3, deskripsi: "", checklist: [], form_schema: [], attachment_required: false });
   const [open, setOpen] = useState(false);
   const [newChecklist, setNewChecklist] = useState("");
   const [schemaOpen, setSchemaOpen] = useState(false);
   const [newField, setNewField] = useState({ key: "", label: "", type: "text", required: true, options: "", help_text: "" });
   const load = async () => { try { const { data } = await api.get("/layanan"); setItems(data); } catch (e) { toast.error(apiError(e)); } };
   useEffect(() => { load(); }, []);
-  const openNew = () => { setEditing(null); setForm({ nama: "", sla_days: 3, deskripsi: "", checklist: [], form_schema: [] }); setOpen(true); };
-  const openEdit = (l) => { setEditing(l); setForm({ nama: l.nama, sla_days: l.sla_days, deskripsi: l.deskripsi || "", checklist: l.checklist || [], form_schema: l.form_schema || [] }); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ nama: "", sla_days: 3, deskripsi: "", checklist: [], form_schema: [], attachment_required: false }); setOpen(true); };
+  const openEdit = (l) => { setEditing(l); setForm({ nama: l.nama, sla_days: l.sla_days, deskripsi: l.deskripsi || "", checklist: l.checklist || [], form_schema: l.form_schema || [], attachment_required: !!l.attachment_required }); setOpen(true); };
 
   const addField = () => {
     if (!newField.key.trim() || !newField.label.trim()) { toast.error("Key & label wajib diisi"); return; }
@@ -155,6 +155,16 @@ function LayananTab() {
               <Label className="text-xs uppercase tracking-wider text-zinc-500">Deskripsi</Label>
               <Input value={form.deskripsi} onChange={(e) => setForm({ ...form, deskripsi: e.target.value })} className="h-10 mt-1" />
             </div>
+            <label className="flex items-center gap-2 px-3 h-10 text-sm bg-zinc-50 border border-zinc-200 rounded-md cursor-pointer" data-testid="layanan-attachment-required-toggle">
+              <input
+                type="checkbox"
+                checked={form.attachment_required}
+                onChange={(e) => setForm({ ...form, attachment_required: e.target.checked })}
+                className="h-4 w-4 rounded border-zinc-300"
+              />
+              <span className="text-zinc-800">Wajib lampiran dokumen</span>
+              <span className="text-xs text-zinc-500 ml-auto">Operator harus unggah file saat membuat pengajuan</span>
+            </label>
             <div>
               <Label className="text-xs uppercase tracking-wider text-zinc-500">Checklist Dokumen Wajib</Label>
               <div className="mt-1 space-y-1.5" data-testid="layanan-checklist-editor">

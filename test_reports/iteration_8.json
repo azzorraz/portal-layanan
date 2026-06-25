@@ -1,0 +1,37 @@
+{
+  "summary": "Phase 8 (Default services + attachment_required + NIP/NIK/NUPTK optional) verified end-to-end. Backend: 13/13 pytest tests passing in /app/backend/tests/test_attachment_required.py (GET /api/layanan returns all 11 default services; 4 services have attachment_required=true exactly as spec [Penugasan Kepala Sekolah, Pengajuan Mutasi Guru, Input Jam Tambahan di Sekolah Lain, Kenaikan Gaji Berkala/KP]; 7 others false; every nip/nik/nuptk/nip_gtk/nik_gtk field across all default schemas has required=false; POST /api/tickets returns 400 'Layanan ini wajib menyertakan lampiran dokumen (SK/KTP).' for layanan #8 without attachments; succeeds with 1 PNG attachment; layanan #3 (no attachment) creates fine; RBAC: operator forbidden on POST /api/layanan (403); koord can create+update+toggle attachment_required and value persists). Frontend operator flow (operator1@dapodik.id): on /tickets/new selecting layanan #8 — nama_operator input is EDITABLE (readOnly=false, disabled=false, no bg-zinc-50, value='Budi Santoso' modifiable); attachment-required-hint visible with text 'Wajib unggah lampiran (SK & KTP)...'; Lampiran Dokumen label has red asterisk; NIP/NIK labels DO NOT have text-red-500 class; submitting without file shows toast 'Layanan ini wajib menyertakan lampiran dokumen (SK/KTP).' and stays on /tickets/new; layanan #9 also shows hint and NIP/NIK/NUPTK without asterisk; layanan #3 (Reset Akun PTK) correctly omits the hint. Koord flow (koordinator@dapodik.id / koordinator123): Master Data → Layanan & SLA tab → Edit row → layanan-attachment-required-toggle visible & functional, toggle off → Simpan → re-open → persisted; restored to original state. Seed completed without crash (backend log confirms 'Seed complete').",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Koord Dashboard (recharts)", "issues": ["Carry-over: recharts width(-1)/height(-1) warnings on first paint (cosmetic, charts render OK)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_attachment_required.py",
+    "/app/test_reports/pytest/phase8_results.xml"
+  ],
+  "action_items": [
+    "(none required for Phase 8) — All review_request items pass.",
+    "(carry-over from earlier iterations) Executive.jsx handleResend should also onRefresh() on catch path. server.py 2018 lines — modular split still pending."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:1913 — DEFAULT_SERVICES unpacked as 4-tuple (nama, sla, checklist, attachment_required); regression from earlier 3-tuple crash is fixed and verified by clean backend startup log.",
+    "/app/backend/server.py:214 _normalize_schema applied to DEFAULT_FORM_SCHEMAS at import time AND in seed() loop for existing docs (lines 1932-1938). Verified live: GET /api/layanan shows all NIP/NIK/NUPTK with required=false even on services with pre-existing schemas.",
+    "/app/backend/server.py:789 create_ticket attachment_required short-circuit raises 400 with the exact spec message 'Layanan ini wajib menyertakan lampiran dokumen (SK/KTP).' BEFORE building the ticket — correct order.",
+    "/app/backend/server.py:1939-1941 seed updates 'attachment_required' field only when missing on existing docs (won't override koord's manual toggle). Acceptable per user spec '1.b — update in-place, preserve custom'.",
+    "CreateTicket.jsx:60-66 — prefill (readonly trigger) contains only nama_sekolah/npsn/npsn_npyp; initialValues spreads prefill + nama_operator so the latter is seeded but NOT marked readonly. DynamicForm.jsx:24 isPrefilled check correctly returns false for nama_operator. Verified live: input is fully editable.",
+    "MasterData.jsx LayananTab — checkbox toggle wired to form.attachment_required, openEdit hydrates from server with !!l.attachment_required (defensive coerce). Save calls PUT /api/layanan/{id} including attachment_required in payload (LayananIn model accepts it). Persistence verified end-to-end."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_attachment_required.py (NEW — 13 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% of Phase 8 review_request UI bullets"},
+  "test_credentials": "operator1@dapodik.id/operator123 + koordinator@dapodik.id/koordinator123 — both working. NOTE: review_request mentioned 'admin123' for koord but actual seed password is 'koordinator123' (matches /app/memory/test_credentials.md). E1 should be aware: review_request had a typo on the koord password.",
+  "seed_data_creation": "Backend tests created ~5 TEST_PHASE8 tickets (kepsek with attach, mutasi with attach, reset-ptk no attach, 3 regression tickets). Cleanup endpoint /api/admin/cleanup-test-tickets invoked at module teardown (returned non-fatal). One TEST_PHASE8 layanan created+updated+deleted in RBAC test cleanly. No residual TEST data observed on UI.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 8 done. DEFAULT_SERVICES is now 4-tuple. Attachment-required-hint visible on layanan with attachment_required=true. NIP/NIK/NUPTK normalized to required=false on import AND seed loop. Toggle is on MasterData→Layanan tab edit modal (data-testid='layanan-attachment-required-toggle'). MasterData route is /master (not /master-data). For regression next iteration: validate /api/admin/cleanup-test-tickets endpoint signature (returned status was checked permissively as 200|404|405). koord login password = 'koordinator123' NOT 'admin123' (review_request had typo).",
+  "rca of the issue": "N/A — no functional issues found. Earlier seed crash (3-tuple unpack vs 4-tuple DEFAULT_SERVICES) is verified fixed by clean backend startup."
+}
