@@ -15,16 +15,18 @@ Aplikasi web modern untuk mengelola seluruh pengajuan layanan Dapodik dari Opera
 
 ## Implemented (2026-02 / Feb 25 2026)
 - ✅ JWT auth: login, logout, /me, change-password; role-based gating (`operator`, `koordinator`).
-- ✅ Seed: 1 koordinator + 3 operator + 3 sekolah + 6 kecamatan + 11 default layanan dengan SLA.
-- ✅ Tickets: create (operator only) with attachments; list with filter & search & SLA filter; detail page with timeline (GitHub-Issue style); status change (koord only) with audit trail; comments; per-ticket attachment upload/download.
+- ✅ Seed: 1 koordinator + 3 operator + 3 sekolah + 6 kecamatan + 11 default layanan dengan SLA + default checklist per layanan.
+- ✅ Tickets: create (operator only) with attachments + checklist; list with filter & search & SLA filter & **infinite scroll** (PAGE_SIZE=30); detail page with timeline (GitHub-Issue style), status change (koord only) with audit trail; comments; per-ticket attachment upload/download; **assignment ke koordinator**; **checklist progress dengan toggle**.
 - ✅ Auto ticket number `TCK-YYYY-NNNNNN` via Mongo counter.
-- ✅ SLA computation: due_at = submitted_at + sla_days; states `tepat_waktu / hampir_terlambat / terlambat / selesai`.
-- ✅ Dashboard: 6 stat cards (Total, Hari Ini, Diproses, Revisi, Selesai, Ditolak), monthly bar chart (6 bulan), SLA pie chart, status distribution.
-- ✅ Master Data CRUD: Sekolah, Operator (one-per-sekolah validated on create + update), Layanan & SLA, Kecamatan.
-- ✅ In-app notifications: bell with unread badge, auto-poll every 25s.
-- ✅ Reports: Excel (openpyxl) + PDF (reportlab) download with date-range + status + layanan + kecamatan filters.
+- ✅ SLA computation + **traffic-light cards** (hijau/kuning/merah) di Dashboard.
+- ✅ Dashboard: 6 stat cards, monthly bar chart, SLA pie chart, status distribution, **+ loading skeleton**.
+- ✅ **Dashboard Pimpinan** (/executive): stats eksekutif (total, selesai, avg processing hours, SLA compliance, by-kecamatan, by-layanan, top sekolah, workload per petugas, avg-per-layanan).
+- ✅ Master Data CRUD: Sekolah, Operator, Layanan & SLA **(dengan checklist editor)**, Kecamatan.
+- ✅ **Knowledge Base / FAQ**: kategori + artikel (CRUD penuh untuk koord, read untuk operator), markdown sederhana, view counter, pencarian + filter kategori.
+- ✅ **Audit Log global** (/audit): semua CRUD master data + ticket status_change + assignment tercatat dengan actor, entity, action, summary, timestamp; filter entity/action/tanggal/search.
+- ✅ In-app notifications, Reports Excel + PDF.
 - ✅ Workflow: Draft / Diajukan / Diproses / Menunggu Dokumen / Revisi / Disetujui / Selesai / Ditolak.
-- ✅ E2E test: 29/29 backend + 100% frontend flows.
+- ✅ E2E test: **49/49** backend + 100% frontend flows.
 
 ## Backlog (Next Phases)
 ### P1
