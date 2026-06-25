@@ -1,0 +1,120 @@
+{
+  "theme_and_archetype": {
+    "domain": "Enterprise SaaS / Internal Operational Tool (Ticketing)",
+    "theme": "Light",
+    "archetype": "4 (Swiss & High-Contrast)",
+    "reasoning": "A ticketing and approval system for Dapodik requires high clarity, functional-first hierarchy, and maximum data density without visual noise. Aligning with Linear and GitHub Issues, the design uses a monochrome structural base accented exclusively by functional status colors."
+  },
+  "typography": {
+    "fonts": {
+      "headings": "Geist, sans-serif",
+      "body": "Manrope, sans-serif",
+      "monospace": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950",
+      "h2": "text-xl sm:text-2xl font-medium tracking-tight text-zinc-900",
+      "h3": "text-lg font-medium tracking-tight text-zinc-900",
+      "body": "text-sm text-zinc-600 leading-relaxed",
+      "labels": "text-xs font-semibold uppercase tracking-[0.05em] text-zinc-500",
+      "ticket_id": "text-sm font-mono font-medium text-zinc-700"
+    },
+    "rules": [
+      "No generic Inter for headings.",
+      "Use mono fonts (JetBrains Mono) for ticket identifiers like TCK-2026-000001 to emphasize technical precision.",
+      "Labels over fields must be uppercase with tight tracking for the 'SaaS control room' look."
+    ]
+  },
+  "color_palette": {
+    "structural": {
+      "background": "#FAFAFA",
+      "surface": "#FFFFFF",
+      "border_light": "#F4F4F5",
+      "border_default": "#E4E4E7",
+      "border_hover": "#D4D4D8"
+    },
+    "text": {
+      "primary": "#09090B",
+      "secondary": "#52525B",
+      "tertiary": "#71717A"
+    },
+    "brand_action": {
+      "primary_bg": "#09090B",
+      "primary_text": "#FAFAFA",
+      "primary_hover": "#27272A"
+    },
+    "status_colors": {
+      "draft": { "bg": "bg-zinc-100", "text": "text-zinc-700", "border": "border-zinc-200" },
+      "diajukan": { "bg": "bg-blue-50", "text": "text-blue-700", "border": "border-blue-200" },
+      "diproses": { "bg": "bg-amber-50", "text": "text-amber-700", "border": "border-amber-200" },
+      "menunggu_dokumen": { "bg": "bg-purple-50", "text": "text-purple-700", "border": "border-purple-200" },
+      "revisi": { "bg": "bg-orange-50", "text": "text-orange-700", "border": "border-orange-200" },
+      "disetujui": { "bg": "bg-emerald-50", "text": "text-emerald-700", "border": "border-emerald-200" },
+      "selesai": { "bg": "bg-emerald-50", "text": "text-emerald-700", "border": "border-emerald-200" },
+      "ditolak": { "bg": "bg-red-50", "text": "text-red-700", "border": "border-red-200" }
+    }
+  },
+  "layout_and_spacing": {
+    "page_structure": {
+      "nav": "Sidebar nav or top navigation with sticky header, z-50, backdrop-blur-md bg-white/80, 1px border bottom.",
+      "container": "Max-width 7xl mx-auto px-4 sm:px-6 lg:px-8 py-8."
+    },
+    "grid_systems": {
+      "dashboard": "Control Room Grid: grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 or gap-6. Dense data, completely utilizing the screen.",
+      "ticket_detail": "Asymmetric split layout: grid-cols-1 lg:grid-cols-3 gap-8. Main left column (col-span-2) for timeline/form, right column (col-span-1) for sticky metadata/SLA constraints."
+    },
+    "padding": {
+      "cards": "p-5 or p-6",
+      "table_cells": "px-4 py-3"
+    }
+  },
+  "component_strategies": {
+    "cards": {
+      "style": "Flat, pure white bg, 1px solid border (border-zinc-200), zero shadow by default to maintain the brutalist clean look.",
+      "hover": "Subtle transition with shadow-sm and border color darkens slightly."
+    },
+    "badges": {
+      "style": "Rounded-full (pill shape), px-2.5 py-0.5, text-xs font-medium. Always use the bg, text, and border color defined in status_colors. Includes a small colored dot next to text if space permits."
+    },
+    "buttons": {
+      "primary": "bg-zinc-950 text-white hover:bg-zinc-800 rounded-md px-4 py-2 text-sm font-medium transition-colors shadow-sm",
+      "secondary": "bg-white text-zinc-900 border border-zinc-200 hover:bg-zinc-50 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+    },
+    "timeline": {
+      "style": "GitHub Issue inspired. Left-aligned border line (border-l-2 border-zinc-200). Items stack vertically.",
+      "nodes": "Icons wrapped in a rounded-full bg-zinc-100 border-2 border-white absolute -left-[17px].",
+      "content": "Cards attached to timeline nodes must have high contrast border and subtle shadow. Differentiate system logs (no card, just text) vs user comments (enclosed in a card)."
+    },
+    "tables": {
+      "style": "Dense tabular layout. text-sm. border-b border-zinc-200 per row. Sticky header with text-xs font-semibold text-zinc-500 uppercase tracking-wider. No vertical borders inside the table."
+    }
+  },
+  "icons_and_assets": {
+    "library": "lucide-react",
+    "usage": "Use crisp, standard thickness icons. Recommended: Activity, Filter, Clock (for SLAs), FileText, CircleCheck, AlertCircle.",
+    "media": {
+      "empty_state_image": {
+        "url": "https://images.unsplash.com/photo-1622547748225-3fc4abd2cca0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGNsZWFuJTIwbWluaW1hbCUyMHNoYXBlcyUyMGxpZ2h0JTIwdGhlbWV8ZW58MHx8fHwxNzgyNDA4MjkyfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract clean light theme shape, perfect for dashboard empty state or 'All clear' state.",
+        "usage": "Use as a small placeholder visual (max-h-32) in empty table states or dashboard 'No pending tickets' areas, desaturated or layered with opacity."
+      }
+    }
+  },
+  "testing_attributes": {
+    "rule": "All interactive and key informational elements MUST include a data-testid attribute.",
+    "examples": [
+      "data-testid='login-submit-button'",
+      "data-testid='ticket-status-badge'",
+      "data-testid='create-ticket-form'",
+      "data-testid='timeline-comment-input'"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Install and setup required font: geist and manrope (or generic fonts acting as them).",
+    "Ensure standard Tailwind configuration matches the color palette outlined, specifically extending zinc and status colors.",
+    "Focus on building Shadcn components over raw HTML inputs for complex interactions (Combobox for Master Data, Datepicker for SLA).",
+    "Prioritize optical alignment on the dashboard metrics (Stats cards with minimal design, large numbers).",
+    "For the Ticket Detail page, construct a robust timeline component that supports user avatars, comments, and system-generated status change events seamlessly.",
+    "Enforce responsive mobile-first views: data tables should gracefully degrade to stacked cards on small screens."
+  ]
+}
