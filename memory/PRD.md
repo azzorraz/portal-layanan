@@ -1,4 +1,4 @@
-# PRD — Sistem Manajemen Approval & Ticketing Layanan Dapodik
+# PRD — Portal Layanan Dapodik
 
 ## Original Problem Statement
 Aplikasi web modern untuk mengelola seluruh pengajuan layanan Dapodik dari Operator Sekolah kepada Koordinator Tim, menggantikan workflow WhatsApp dengan One-Stop Service ticket system. Skala target: 100–500+ pengajuan/bulan.
@@ -36,6 +36,15 @@ Aplikasi web modern untuk mengelola seluruh pengajuan layanan Dapodik dari Opera
 - ✅ CreateTicket.jsx: "Nama Operator" sekarang **editable** (terisi awal dari user.name tapi tidak readonly). Lampiran label menampilkan asterisk merah + hint untuk layanan attachment_required.
 - ✅ Layanan yg `attachment_required=true`: #8 Penugasan Kepala Sekolah, #9 Pengajuan Mutasi Guru, #10 Input Jam Tambahan di Sekolah Lain, #11 Kenaikan Gaji Berkala/KP.
 - ✅ E2E test Phase 8: **13/13 backend pytest pass** + frontend flow 100% (operator + koord).
+
+## Implemented Phase 9 — Rebrand + NPSN Auth + Blue Theme (2026-06-25)
+- ✅ **Rebranding**: nama aplikasi resmi **"Portal Layanan Dapodik"** (sebelumnya "Dapodik Ticketing"). Updated di Login, Layout sidebar, header mobile, browser tab title.
+- ✅ **Operator login via NPSN**: POST /api/auth/login menerima `identifier` (email ATAU NPSN). Operator login menggunakan NPSN sekolah (cth `20220001`) + password default `123456`. Backend resolve NPSN → cari sekolah → cari user role=operator dgn sekolah_id terkait.
+- ✅ **Koordinator baru**: `admin@dapodik.id` / `admin123` (env `ADMIN_EMAIL`, `ADMIN_PASSWORD`). Akun lama `koordinator@dapodik.id` di-set `active=false` oleh seed (preserve tapi non-aktif).
+- ✅ **Login UI**: 2 tab toggle (Operator/Koordinator), dynamic label/placeholder/hint sesuai mode (NPSN vs Email).
+- ✅ **Tema biru-putih**: Primary accent `bg-blue-600` (tombol, active sidebar, avatar, DP logo). Visual pane login → `bg-blue-900`. Netral abu-abu dipertahankan untuk text/border/surface agar tetap minimalist.
+- ✅ Idempotent seed: existing operator password di-reset ke `123456` jika tidak match; admin koord baru auto-promoted; legacy koord auto-deactivated.
+- ✅ E2E test Phase 9: **23/23 backend pytest pass** (10 phase9 + 13 phase8 regression) + frontend flow 100%.
 
 ## Backlog (Next Phases)
 ### P1
