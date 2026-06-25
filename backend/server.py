@@ -186,6 +186,17 @@ class CommentIn(BaseModel):
     content: str
 
 
+class BulkAssignIn(BaseModel):
+    ticket_ids: List[str] = Field(min_length=1, max_length=500)
+    assignee_id: Optional[str] = None
+
+
+class BulkStatusIn(BaseModel):
+    ticket_ids: List[str] = Field(min_length=1, max_length=500)
+    status: Literal["Draft", "Diajukan", "Diproses", "Menunggu Dokumen", "Revisi", "Disetujui", "Selesai", "Ditolak"]
+    catatan: Optional[str] = None
+
+
 # ---------- Helpers ----------
 async def next_ticket_number() -> str:
     year = datetime.now(timezone.utc).year
@@ -770,6 +781,75 @@ async def update_checklist(tid: str, payload: ChecklistUpdate, user: dict = Depe
     await log_activity(tid, user, "checklist", f"Checklist diperbarui ({sum(1 for i in items if i['checked'])}/{len(items)} selesai)")
     saved = await db.tickets.find_one({"_id": ObjectId(tid)})
     return await _enrich_one(saved)
+
+
+@api.post("/tickets/bulk-assign")
+async def bulk_assign(payload: BulkAssignIn, user: dict = Depends(require_role("koordinator"))):
+    assignee_name = None
+    if payload.assignee_id:
+        a = await db.users.find_one({"_id": ObjectId(payload.assignee_id), "role": "koordinator"})
+        if not a:
+            raise HTTPException(status_code=404, detail="Petugas tidak ditemukan")
+        assignee_name = a.get("name") or a.get("email")
+
+    updated = 0
+    msg_log = f"Tugas dialihkan ke {assignee_name}" if assignee_name else "Penugasan dilepas"
+    for tid in payload.ticket_ids:
+        try:
+            oid = ObjectId(tid)
+        except Exception:
+            continue
+        t = await db.tickets.find_one({"_id": oid})
+        if not t:
+            continue
+        await db.tickets.update_one(
+            {"_id": oid},
+            {"$set": {"assignee_id": payload.assignee_id, "assignee_name": assignee_name, "updated_at": iso(now_utc())}},
+        )
+        await log_activity(tid, user, "assign", msg_log, {"assignee_id": payload.assignee_id, "assignee_name": assignee_name, "bulk": True})
+        if payload.assignee_id and payload.assignee_id != user["id"]:
+            await notify(payload.assignee_id, tid, "Ticket Ditugaskan", f"{t['ticket_number']} - {t['judul']}")
+        updated += 1
+
+    await log_audit(
+        user, "ticket", None, "bulk_assign",
+        f"Bulk assign {updated} tiket → {assignee_name or 'Tidak ditugaskan'}",
+        {"count": updated, "assignee_id": payload.assignee_id, "ticket_ids": payload.ticket_ids[:50]},
+    )
+    return {"ok": True, "updated": updated}
+
+
+@api.post("/tickets/bulk-status")
+async def bulk_status(payload: BulkStatusIn, user: dict = Depends(require_role("koordinator"))):
+    updated = 0
+    for tid in payload.ticket_ids:
+        try:
+            oid = ObjectId(tid)
+        except Exception:
+            continue
+        t = await db.tickets.find_one({"_id": oid})
+        if not t:
+            continue
+        old = t.get("status")
+        if old == payload.status:
+            continue
+        update = {"status": payload.status, "updated_at": iso(now_utc())}
+        if payload.status in ("Selesai", "Disetujui", "Ditolak"):
+            update["closed_at"] = iso(now_utc())
+        await db.tickets.update_one({"_id": oid}, {"$set": update})
+        msg = f"Status diubah: {old} → {payload.status}"
+        if payload.catatan:
+            msg += f" — {payload.catatan}"
+        await log_activity(tid, user, "status_change", msg, {"from": old, "to": payload.status, "catatan": payload.catatan, "bulk": True})
+        await notify(t["operator_id"], tid, "Status Pengajuan Diperbarui", f"{t['ticket_number']}: {payload.status}")
+        updated += 1
+
+    await log_audit(
+        user, "ticket", None, "bulk_status",
+        f"Bulk status change {updated} tiket → {payload.status}",
+        {"count": updated, "status": payload.status, "catatan": payload.catatan, "ticket_ids": payload.ticket_ids[:50]},
+    )
+    return {"ok": True, "updated": updated}
 
 
 # ---------- Knowledge Base ----------

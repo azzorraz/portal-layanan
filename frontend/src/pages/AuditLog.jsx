@@ -25,10 +25,12 @@ const ACTION_LABEL = {
   delete: { label: "Hapus", cls: "bg-red-50 text-red-700 border-red-200" },
   status_change: { label: "Status", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   assign: { label: "Assign", cls: "bg-purple-50 text-purple-700 border-purple-200" },
+  bulk_assign: { label: "Bulk Assign", cls: "bg-purple-50 text-purple-700 border-purple-300" },
+  bulk_status: { label: "Bulk Status", cls: "bg-amber-50 text-amber-700 border-amber-300" },
 };
 
 const ENTITIES = ["sekolah", "operator", "layanan", "kecamatan", "ticket", "kb_article", "kb_category"];
-const ACTIONS = ["create", "update", "delete", "status_change", "assign"];
+const ACTIONS = ["create", "update", "delete", "status_change", "assign", "bulk_assign", "bulk_status"];
 
 export default function AuditLog() {
   const [items, setItems] = useState([]);
