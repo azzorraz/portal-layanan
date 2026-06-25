@@ -22,10 +22,13 @@ export default function ChangePassword() {
 
   // WA opt-out section
   const [waOptOut, setWaOptOut] = useState(false);
+  const [koordPhone, setKoordPhone] = useState("");
   const [savingPref, setSavingPref] = useState(false);
+  const [savingPhone, setSavingPhone] = useState(false);
 
   useEffect(() => {
     if (user && typeof user.wa_opt_out === "boolean") setWaOptOut(user.wa_opt_out);
+    if (user?.phone) setKoordPhone(user.phone);
   }, [user]);
 
   const submitPwd = async (e) => {
@@ -54,6 +57,16 @@ export default function ChangePassword() {
     } finally {
       setSavingPref(false);
     }
+  };
+
+  const saveKoordPhone = async () => {
+    setSavingPhone(true);
+    try {
+      await api.patch("/auth/preferences", { phone: koordPhone.trim() });
+      await refresh();
+      toast.success("Nomor WhatsApp koordinator tersimpan");
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setSavingPhone(false); }
   };
 
   return (
@@ -91,6 +104,23 @@ export default function ChangePassword() {
             aria-label="Aktifkan notifikasi WhatsApp"
           />
         </div>
+
+        {user?.role === "koordinator" && (
+          <div className="mt-4 pt-4 border-t border-zinc-100">
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">No. WhatsApp Koordinator (untuk alert quota & sistem)</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                type="tel" value={koordPhone} onChange={(e) => setKoordPhone(e.target.value)}
+                placeholder="08xxxxxxxxxx" className="h-10 flex-1"
+                data-testid="koord-phone-input"
+              />
+              <Button onClick={saveKoordPhone} disabled={savingPhone} className="bg-zinc-950 hover:bg-zinc-800" data-testid="save-koord-phone">
+                {savingPhone ? "..." : "Simpan"}
+              </Button>
+            </div>
+            <p className="text-[11px] text-zinc-500 mt-2">Nomor ini akan menerima notifikasi sistem seperti peringatan quota WhatsApp rendah.</p>
+          </div>
+        )}
       </Card>
 
       <Card className="border-zinc-200 shadow-none p-6">

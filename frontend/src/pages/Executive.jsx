@@ -7,9 +7,10 @@ import {
   BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend, Line, LineChart,
 } from "recharts";
-import { Loader2, TrendingUp, Building2, Users, CheckCircle2, Clock3, Activity, Crown, MessageSquare, AlertOctagon, CheckCheck, BatteryMedium } from "lucide-react";
+import { Loader2, TrendingUp, Building2, Users, CheckCircle2, Clock3, Activity, Crown, MessageSquare, AlertOctagon, CheckCheck, BatteryMedium, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { fmtDateTime } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 
 const PALETTE = ["#09090b", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899"];
 
@@ -203,13 +204,27 @@ export default function Executive() {
       </Card>
 
       {/* WhatsApp Delivery Stats */}
-      {waStats && <WhatsAppStats data={waStats} />}
+      {waStats && <WhatsAppStats data={waStats} onRefresh={load} />}
     </div>
   );
 }
 
-function WhatsAppStats({ data }) {
+function WhatsAppStats({ data, onRefresh }) {
   const SEND_PALETTE = { sent: "#10b981", failed: "#ef4444" };
+  const quotaLow = data.quota_remaining !== null && data.quota_remaining < 50;
+  const [resending, setResending] = useState(null);
+
+  const handleResend = async (logId) => {
+    setResending(logId);
+    try {
+      const { data: res } = await api.post(`/admin/wa-logs/${logId}/resend`);
+      if (res.status) toast.success("Pesan terkirim ulang");
+      else toast.error(res.detail || "Gagal mengirim ulang");
+      onRefresh?.();
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setResending(null); }
+  };
+
   return (
     <div className="space-y-4" data-testid="wa-stats-section">
       <div className="flex items-center gap-2 pt-4">
@@ -221,6 +236,20 @@ function WhatsAppStats({ data }) {
           <h2 className="font-display text-xl font-semibold tracking-tight">WhatsApp Delivery</h2>
         </div>
       </div>
+
+      {quotaLow && (
+        <Card className="border-amber-300 bg-amber-50 shadow-none p-4" data-testid="wa-quota-low-banner">
+          <div className="flex items-start gap-3">
+            <AlertOctagon className="h-5 w-5 text-amber-700 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-medium text-amber-900">Quota WhatsApp Hampir Habis</div>
+              <div className="text-sm text-amber-800 mt-0.5">
+                Sisa <strong>{data.quota_remaining}</strong> pesan. Segera top-up di dashboard Fonnte untuk menghindari kegagalan notifikasi. Notifikasi alert otomatis telah dikirim ke semua koordinator.
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-5 border-zinc-200 shadow-none" data-testid="wa-stat-quota">
@@ -312,15 +341,28 @@ function WhatsAppStats({ data }) {
                 <th className="text-left px-2 py-2 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Event</th>
                 <th className="text-left px-2 py-2 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Tujuan</th>
                 <th className="text-left px-2 py-2 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Detail</th>
+                <th className="text-right px-2 py-2 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Aksi</th>
               </tr></thead>
               <tbody>
                 {data.recent_failures.map((f) => (
-                  <tr key={f.id} className="border-b border-zinc-100">
+                  <tr key={f.id} className="border-b border-zinc-100" data-testid={`wa-failure-row-${f.id}`}>
                     <td className="px-2 py-2 text-xs font-mono text-zinc-600">{fmtDateTime(f.created_at)}</td>
                     <td className="px-2 py-2 font-mono text-xs">{f.ticket_number || "—"}</td>
                     <td className="px-2 py-2 text-zinc-700 capitalize">{(f.event_type || "").replace(/_/g, " ")}</td>
                     <td className="px-2 py-2 font-mono text-xs">****{f.phone_last4}</td>
                     <td className="px-2 py-2 text-xs text-red-700 break-all">{f.detail}</td>
+                    <td className="px-2 py-2 text-right">
+                      <Button
+                        size="sm" variant="outline"
+                        disabled={resending === f.id || !f.ticket_number || (f.event_type || "").startsWith("test")}
+                        onClick={() => handleResend(f.id)}
+                        className="h-7 text-xs"
+                        data-testid={`wa-resend-${f.id}`}
+                      >
+                        <RotateCw className={`h-3 w-3 mr-1 ${resending === f.id ? "animate-spin" : ""}`} />
+                        {resending === f.id ? "..." : "Kirim Ulang"}
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

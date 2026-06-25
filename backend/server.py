@@ -447,7 +447,55 @@ async def notify_operator_wa(
         "skipped": bool(res.get("skipped")),
     })
     await db.wa_logs.insert_one(log_doc)
+    # check quota threshold and alert koordinators if low
+    if res.get("quota_remaining") is not None:
+        try:
+            await maybe_alert_low_quota(int(res["quota_remaining"]))
+        except Exception as e:
+            logger.warning("low quota alert failed: %s", e)
     return res
+
+
+QUOTA_LOW_THRESHOLD = 50
+QUOTA_ALERT_COOLDOWN_HOURS = 6
+
+
+async def maybe_alert_low_quota(quota: int):
+    """Fire in-app + WhatsApp alert to all koordinator when quota drops below
+    threshold. Self-throttled: at most one alert per cooldown window."""
+    if quota >= QUOTA_LOW_THRESHOLD:
+        return
+    state = await db.system_state.find_one({"_id": "quota_alert"})
+    now = now_utc()
+    if state and state.get("last_sent_at"):
+        try:
+            last = datetime.fromisoformat(state["last_sent_at"])
+            if (now - last).total_seconds() < QUOTA_ALERT_COOLDOWN_HOURS * 3600:
+                return
+        except Exception:
+            pass
+    title = "Quota WhatsApp Hampir Habis"
+    body = f"Sisa quota Fonnte tinggal {quota} pesan. Segera top-up untuk menjaga kelancaran notifikasi."
+    msg = (
+        "*Dapodik Ticketing — Peringatan Quota*\n"
+        f"Sisa quota WhatsApp (Fonnte): *{quota} pesan*.\n"
+        "Mohon segera top-up agar notifikasi ke operator tidak terganggu."
+    )
+    # in-app to all koordinators + WA to those with phone
+    async for k in db.users.find({"role": "koordinator"}):
+        kid = str(k["_id"])
+        await notify(kid, None, title, body)
+        kphone = (k.get("phone") or "").strip()
+        if kphone:
+            try:
+                await send_whatsapp(kphone, msg)
+            except Exception as e:
+                logger.warning("low-quota WA to koord failed: %s", e)
+    await db.system_state.update_one(
+        {"_id": "quota_alert"},
+        {"$set": {"last_sent_at": iso(now), "quota_at_alert": quota}},
+        upsert=True,
+    )
 
 
 async def compute_due_at(layanan_id: str, submitted_at: datetime) -> Optional[str]:
@@ -1390,16 +1438,21 @@ class WhatsAppTestIn(BaseModel):
 
 
 class WaPreferenceIn(BaseModel):
-    wa_opt_out: bool
+    wa_opt_out: Optional[bool] = None
+    phone: Optional[str] = None  # WhatsApp number for koordinator self-alerts
 
 
 @api.patch("/auth/preferences")
 async def update_preferences(payload: WaPreferenceIn, user: dict = Depends(get_current_user)):
-    await db.users.update_one(
-        {"_id": ObjectId(user["id"])},
-        {"$set": {"wa_opt_out": payload.wa_opt_out, "updated_at": iso(now_utc())}},
-    )
-    return {"ok": True, "wa_opt_out": payload.wa_opt_out}
+    update: dict = {"updated_at": iso(now_utc())}
+    data = payload.model_dump(exclude_unset=True)
+    if "wa_opt_out" in data:
+        update["wa_opt_out"] = bool(data["wa_opt_out"])
+    if "phone" in data:
+        update["phone"] = data["phone"]
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": update})
+    fresh = await db.users.find_one({"_id": ObjectId(user["id"])})
+    return {"ok": True, "wa_opt_out": bool(fresh.get("wa_opt_out")), "phone": fresh.get("phone")}
 
 
 @api.post("/admin/test-whatsapp")
@@ -1423,6 +1476,66 @@ async def admin_test_wa(payload: WhatsAppTestIn, user: dict = Depends(require_ro
     })
     await log_audit(user, "system", None, "test_whatsapp", f"Test WA → {payload.target[-4:]}", {"result_status": result.get("status")})
     return result
+
+
+@api.post("/admin/wa-logs/{log_id}/resend")
+async def resend_wa_log(log_id: str, user: dict = Depends(require_role("koordinator"))):
+    """Resend a previously-failed WhatsApp message. Rebuilds the message from
+    the original event_type using the latest ticket state."""
+    try:
+        log = await db.wa_logs.find_one({"_id": ObjectId(log_id)})
+    except Exception:
+        raise HTTPException(status_code=404, detail="Log tidak ditemukan")
+    if not log:
+        raise HTTPException(status_code=404, detail="Log tidak ditemukan")
+    event = log.get("event_type") or "manual_resend"
+
+    ticket = None
+    if log.get("ticket_id"):
+        try:
+            ticket = await db.tickets.find_one({"_id": ObjectId(log["ticket_id"])})
+        except Exception:
+            ticket = None
+
+    if event == "test":
+        target_raw = None
+        if log.get("phone_last4"):
+            target_raw = None  # we cannot reconstruct full phone from last4 — fall back to error
+        # cannot reconstruct full phone for plain "test" — refuse
+        raise HTTPException(status_code=400, detail="Test message tidak dapat di-resend (nomor lengkap tidak disimpan untuk privasi)")
+
+    if not ticket:
+        raise HTTPException(status_code=400, detail="Tiket terkait tidak ditemukan — tidak bisa rebuild pesan")
+
+    phone = (ticket.get("form_data") or {}).get("no_whatsapp")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Nomor WhatsApp tidak tersedia pada tiket")
+
+    if event == "created":
+        message = msg_ticket_created(ticket)
+    elif event in ("status_change", "bulk_status"):
+        message = msg_bulk_status(ticket, ticket.get("status") or "")
+    elif event == "comment":
+        message = (
+            "*Dapodik Ticketing — Pemberitahuan*\n"
+            f"No. Ticket: *{ticket.get('ticket_number')}*\n"
+            "Mohon cek aplikasi untuk komentar terbaru dari koordinator."
+        )
+    else:
+        message = (
+            "*Dapodik Ticketing — Pemberitahuan*\n"
+            f"No. Ticket: *{ticket.get('ticket_number')}*\n"
+            f"Status saat ini: *{ticket.get('status')}*"
+        )
+
+    res = await notify_operator_wa(ticket, f"resend_{event}", message)
+    await log_audit(
+        user, "system", str(log["_id"]), "wa_resend",
+        f"Resend WA log ({event}) untuk {ticket.get('ticket_number')}",
+        {"original_log_id": str(log["_id"]), "result_status": res.get("status")},
+    )
+    return res
+
 
 
 @api.get("/executive/whatsapp-stats")

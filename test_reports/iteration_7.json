@@ -1,0 +1,43 @@
+{
+  "summary": "Phase 7 (Quota low-alert + WA resend mechanism) verified. Backend: 9/9 pytest tests passing in /app/backend/tests/test_phase7.py (PATCH /auth/preferences with phone, GET /me reflects phone, resend RBAC 403, invalid log_id 404, nonexistent log_id 404, resend success path creates new wa_log with event_type='resend_created', audit log 'wa_resend' written). Frontend: koord-phone-input + save-koord-phone visible only for koordinator, hidden for operator (verified via screenshot). wa-quota-low-banner correctly ABSENT when quota=954 (>=50 threshold). Recent Failures table renders 3 wa-resend-* buttons, all enabled (ticket-bound rows). Clicking a resend button on an orphaned resend_created row (ticket deleted by cleanup) correctly produced 400 'Tiket terkait tidak ditemukan' error toast. Live Fonnte quota stayed at 954 across the entire test run (bad phones rejected by Fonnte without quota burn).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Resend on failure", "issue": "On axios error (400/4xx) onRefresh() is NOT called — the catch block only shows a toast. Spec says 'page reloads' even on the 400 path. Currently the failures table does not auto-refresh after a failed resend. Minor: user can manually refresh, but it differs from spec.", "affected_selectors": ["[data-testid^=\"wa-resend-\"]", "[data-testid=\"wa-recent-failures\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "/executive (recharts)", "issues": ["Pre-existing carry-over from iteration_6: recharts width(-1)/height(-1) console warnings on first paint — cosmetic, charts render correctly."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase7.py",
+    "/app/test_reports/pytest/phase7_results.xml"
+  ],
+  "action_items": [
+    "(minor) In /app/frontend/src/pages/Executive.jsx handleResend(): move onRefresh?.() into the finally block (or also call after the catch toast) so the failures table refreshes after a failed resend per spec. Current code only refreshes on the try-path success/non-throw branches.",
+    "(spec coverage note) The Phase 7 quota-low alert helper (maybe_alert_low_quota) and 6-hour cooldown via db.system_state could not be exercised end-to-end from out-of-process tests because we cannot monkey-patch send_whatsapp in the live backend and the live Fonnte quota is 954 (well above the 50 threshold). Code review of the helper confirms: (a) early-return when quota >= QUOTA_LOW_THRESHOLD, (b) cooldown comparison via datetime.fromisoformat(state['last_sent_at']) with 6h * 3600 secs window, (c) per-koord notify() insert into db.notifications with title 'Quota WhatsApp Hampir Habis', (d) send_whatsapp to koord.phone when set, (e) system_state upsert with iso(now) and quota_at_alert. Recommend a backend-side unit test (test using AsyncMock to patch send_whatsapp) inside the backend container if E1 wants direct coverage.",
+    "(carry-over) server.py ~1984 lines — recommend modular split (still pending from iteration_6)."
+  ],
+  "critical_code_review_comments": [
+    "resend_wa_log endpoint correctly rejects 'test' events with 400 BEFORE checking ticket — good (Phase 7 spec requirement).",
+    "resend_wa_log calls notify_operator_wa which writes a NEW wa_log row with event_type='resend_{original}' — verified end-to-end (after first resend, by_event contained {event:'resend_created', sent+failed=1}).",
+    "resend_wa_log: invalid ObjectId (non-hex 24-char) triggers exception in ObjectId() and gets caught into 404 — correct behavior matches spec.",
+    "PATCH /auth/preferences uses model_dump(exclude_unset=True) so partial updates work: passing only {phone:...} preserves wa_opt_out; passing only {wa_opt_out:...} preserves phone. Verified.",
+    "PATCH /auth/preferences allows empty string phone (treated as clear) — server stores '' which is consistent with 'no phone'. Helper maybe_alert_low_quota checks (kphone or '').strip() so empty string correctly skips WA send.",
+    "maybe_alert_low_quota uses async for over db.users.find({role:'koordinator'}) — efficient, no full collection scan. Per-koord notify() write is sequential which is fine for the small koord-count expected.",
+    "Frontend Executive.jsx handleResend: onRefresh ONLY called in try-path. If api.post raises (4xx/5xx) the failures table is NOT auto-refreshed. Spec calls for reload on the 400 path too — minor mismatch.",
+    "Frontend disable logic: `disabled={resending===f.id || !f.ticket_number || (f.event_type||'').startsWith('test')}` correctly disables for (a) in-flight resend, (b) test rows without ticket, (c) original test events. Verified.",
+    "Frontend banner threshold (`data.quota_remaining < 50`) matches backend QUOTA_LOW_THRESHOLD=50. Verified absent at quota=954."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase7.py (NEW — 9 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (9/9 phase 7 tests)", "frontend": "100% of Phase 7 review_request UI bullets verified"},
+  "test_credentials": "koordinator@dapodik.id/koordinator123 + operator1@dapodik.id/operator123 — both working",
+  "seed_data_creation": "Created 1 TEST_PHASE7 ticket with bad phone '08' to generate failed wa_log row. Cleanup hook calls /api/admin/cleanup-test-tickets at module teardown. Koord phone preference left at '081299990000' for downstream tests (or restored to '' via cleanup_at_end).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 7 endpoints live: PATCH /api/auth/preferences now accepts {wa_opt_out?, phone?}. POST /api/admin/wa-logs/{log_id}/resend (koord-only). Selectors verified: wa-quota-low-banner (conditional quota<50), wa-resend-{id} (per failure row), koord-phone-input + save-koord-phone (koord-only). Backend constants: QUOTA_LOW_THRESHOLD=50, QUOTA_ALERT_COOLDOWN_HOURS=6 stored at /app/backend/server.py lines 459-460. system_state collection uses _id='quota_alert' with {last_sent_at:iso, quota_at_alert:int}. Fonnte quota at 954 after all tests (no burn). For low-quota verification, recommend in-process test inside backend container with monkeypatch on fonnte.send_whatsapp returning {'status':True,'quota_remaining':30,'detail':'mocked'}.",
+  "rca of the issue": "Minor frontend issue: Executive.jsx handleResend does not refresh on the 4xx path. Root cause: onRefresh?.() is placed inside try{} after the success/error branches but BEFORE the catch{} block. When api.post throws (4xx), control jumps to catch{} skipping the onRefresh call. Mitigation: move `onRefresh?.()` into the finally{} block, or duplicate it in both try and catch. Reproduction: click any wa-resend-* button whose underlying ticket has been deleted → 400 response → toast appears but failures table does not auto-reload."
+}
