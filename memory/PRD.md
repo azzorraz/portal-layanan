@@ -21,12 +21,21 @@ Aplikasi web modern untuk mengelola seluruh pengajuan layanan Dapodik dari Opera
 - ✅ SLA computation + **traffic-light cards** (hijau/kuning/merah) di Dashboard.
 - ✅ Dashboard: 6 stat cards, monthly bar chart, SLA pie chart, status distribution, **+ loading skeleton**.
 - ✅ **Dashboard Pimpinan** (/executive): stats eksekutif (total, selesai, avg processing hours, SLA compliance, by-kecamatan, by-layanan, top sekolah, workload per petugas, avg-per-layanan).
-- ✅ Master Data CRUD: Sekolah, Operator, Layanan & SLA **(dengan checklist editor)**, Kecamatan.
+- ✅ Master Data CRUD: Sekolah, Operator, Layanan & SLA **(dengan checklist editor & attachment_required toggle)**, Kecamatan.
 - ✅ **Knowledge Base / FAQ**: kategori + artikel (CRUD penuh untuk koord, read untuk operator), markdown sederhana, view counter, pencarian + filter kategori.
 - ✅ **Audit Log global** (/audit): semua CRUD master data + ticket status_change + assignment tercatat dengan actor, entity, action, summary, timestamp; filter entity/action/tanggal/search.
 - ✅ In-app notifications, Reports Excel + PDF.
 - ✅ Workflow: Draft / Diajukan / Diproses / Menunggu Dokumen / Revisi / Disetujui / Selesai / Ditolak.
-- ✅ E2E test: **49/49** backend + 100% frontend flows.
+- ✅ Fonnte WhatsApp integration (notifikasi event), delivery stats dashboard, low-quota alert, resend mechanism, operator opt-out preferences.
+
+## Implemented Phase 8 (2026-06-25)
+- ✅ DEFAULT_SERVICES upgraded to 4-tuple: `(nama, sla_hari, checklist, attachment_required)`. Seed loop fixed (was crashing on startup with 3-tuple unpack).
+- ✅ Layanan model: tambah field `attachment_required: bool`. CRUD + toggle UI di Master Data → Layanan & SLA (`data-testid="layanan-attachment-required-toggle"`).
+- ✅ NIP/NIK/NUPTK/NIP_GTK/NIK_GTK di semua 11 default layanan dipaksa `required=false` baik di seed baru maupun normalisasi in-place untuk dokumen lama.
+- ✅ POST /api/tickets validasi: jika `layanan.attachment_required=True` dan `attachments` kosong → 400 "Layanan ini wajib menyertakan lampiran dokumen (SK/KTP)."
+- ✅ CreateTicket.jsx: "Nama Operator" sekarang **editable** (terisi awal dari user.name tapi tidak readonly). Lampiran label menampilkan asterisk merah + hint untuk layanan attachment_required.
+- ✅ Layanan yg `attachment_required=true`: #8 Penugasan Kepala Sekolah, #9 Pengajuan Mutasi Guru, #10 Input Jam Tambahan di Sekolah Lain, #11 Kenaikan Gaji Berkala/KP.
+- ✅ E2E test Phase 8: **13/13 backend pytest pass** + frontend flow 100% (operator + koord).
 
 ## Backlog (Next Phases)
 ### P1
