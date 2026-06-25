@@ -107,7 +107,7 @@ export default function AuditLog() {
             </Select>
           </div>
           <div className="flex items-end gap-2">
-            <Button onClick={load} className="bg-zinc-950 hover:bg-zinc-800 h-10 flex-1" data-testid="audit-apply">
+            <Button onClick={load} className="bg-blue-600 hover:bg-blue-700 h-10 flex-1" data-testid="audit-apply">
               <RotateCw className="h-4 w-4 mr-1.5" /> Refresh
             </Button>
           </div>
@@ -121,7 +121,7 @@ export default function AuditLog() {
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Sampai</Label>
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-10 mt-1" />
           </div>
-          <Button onClick={load} className="bg-zinc-950 hover:bg-zinc-800 h-10">Terapkan Tanggal</Button>
+          <Button onClick={load} className="bg-blue-600 hover:bg-blue-700 h-10">Terapkan Tanggal</Button>
           {(q || entity !== "all" || action !== "all" || fromDate || toDate) && (
             <Button onClick={clear} variant="outline" className="h-10"><X className="h-4 w-4 mr-1.5" />Reset</Button>
           )}

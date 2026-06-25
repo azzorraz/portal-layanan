@@ -141,7 +141,7 @@ export default function KnowledgeArticle({ mode = "view" }) {
                   <Input placeholder="Nama kategori" value={newCat} onChange={(e) => setNewCat(e.target.value)} />
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setCatDialogOpen(false)}>Batal</Button>
-                    <Button onClick={addCategory} className="bg-zinc-950 hover:bg-zinc-800">Tambah</Button>
+                    <Button onClick={addCategory} className="bg-blue-600 hover:bg-blue-700">Tambah</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -161,7 +161,7 @@ export default function KnowledgeArticle({ mode = "view" }) {
           </div>
           <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
             <Button variant="outline" onClick={() => nav(article ? `/kb/${id}` : "/kb")}><X className="h-4 w-4 mr-1.5" />Batal</Button>
-            <Button onClick={save} disabled={savingForm} className="bg-zinc-950 hover:bg-zinc-800" data-testid="kb-save-button">
+            <Button onClick={save} disabled={savingForm} className="bg-blue-600 hover:bg-blue-700" data-testid="kb-save-button">
               <Save className="h-4 w-4 mr-1.5" /> {savingForm ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>

@@ -19,7 +19,7 @@ function SideLink({ to, icon: Icon, label, testId, end }) {
       end={end}
       data-testid={testId}
       className={({ isActive }) =>
-        `${linkBase} ${isActive ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"}`
+        `${linkBase} ${isActive ? "bg-blue-600 text-white" : "text-zinc-700 hover:bg-blue-50 hover:text-blue-700"}`
       }
     >
       <Icon className="h-4 w-4" />
@@ -46,12 +46,12 @@ export default function Layout() {
       <aside className="hidden md:flex md:w-64 flex-col border-r border-zinc-200 bg-white">
         <div className="h-16 flex items-center px-5 border-b border-zinc-200">
           <Link to="/dashboard" className="flex items-center gap-2" data-testid="sidebar-brand">
-            <div className="h-7 w-7 rounded-md bg-zinc-900 text-white inline-flex items-center justify-center text-[11px] font-bold tracking-tighter">
+            <div className="h-7 w-7 rounded-md bg-blue-600 text-white inline-flex items-center justify-center text-[11px] font-bold tracking-tighter">
               DP
             </div>
             <div className="flex flex-col leading-tight">
-              <span className="font-display text-sm font-semibold text-zinc-900">Dapodik</span>
-              <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Ticketing</span>
+              <span className="font-display text-sm font-semibold text-zinc-900">Portal Layanan</span>
+              <span className="text-[10px] uppercase tracking-[0.12em] text-blue-600 font-semibold">Dapodik</span>
             </div>
           </Link>
         </div>
@@ -89,7 +89,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 sticky top-0 z-30 bg-white/85 backdrop-blur border-b border-zinc-200 flex items-center justify-between px-4 sm:px-6">
           <div className="md:hidden">
-            <Link to="/dashboard" className="font-display font-semibold">Dapodik</Link>
+            <Link to="/dashboard" className="font-display font-semibold">Portal Layanan Dapodik</Link>
           </div>
           <div className="hidden md:block">
             <div className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
@@ -107,7 +107,7 @@ export default function Layout() {
                   data-testid="user-menu-trigger"
                   className="flex items-center gap-2 h-9 pl-1 pr-2 rounded-md border border-zinc-200 bg-white hover:bg-zinc-50"
                 >
-                  <span className="h-7 w-7 rounded-md bg-zinc-900 text-white text-[11px] font-semibold inline-flex items-center justify-center">
+                  <span className="h-7 w-7 rounded-md bg-blue-600 text-white text-[11px] font-semibold inline-flex items-center justify-center">
                     {initials}
                   </span>
                   <span className="hidden sm:block text-sm text-zinc-700">{user?.name}</span>

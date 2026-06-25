@@ -114,7 +114,7 @@ export default function Dashboard() {
           <p className="text-sm text-zinc-500 mt-1">Ringkasan pengajuan layanan Dapodik secara real-time.</p>
         </div>
         {user?.role === "operator" && (
-          <Button asChild className="bg-zinc-950 hover:bg-zinc-800">
+          <Button asChild className="bg-blue-600 hover:bg-blue-700">
             <Link to="/tickets/new" data-testid="dashboard-new-ticket-button">+ Buat Pengajuan</Link>
           </Button>
         )}

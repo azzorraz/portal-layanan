@@ -188,7 +188,7 @@ export default function TicketDetail() {
                 data-testid="comment-input"
               />
               <div className="mt-2 flex justify-end">
-                <Button type="submit" disabled={posting || !comment.trim()} className="bg-zinc-950 hover:bg-zinc-800" data-testid="submit-comment-button">
+                <Button type="submit" disabled={posting || !comment.trim()} className="bg-blue-600 hover:bg-blue-700" data-testid="submit-comment-button">
                   {posting ? "Mengirim..." : "Kirim Komentar"}
                 </Button>
               </div>
@@ -337,7 +337,7 @@ function StatusChangeDialog({ ticket, onChanged }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-zinc-950 hover:bg-zinc-800" data-testid="change-status-button">Ubah Status</Button>
+        <Button className="bg-blue-600 hover:bg-blue-700" data-testid="change-status-button">Ubah Status</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -360,7 +360,7 @@ function StatusChangeDialog({ ticket, onChanged }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-          <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-status-change">
+          <Button onClick={submit} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="confirm-status-change">
             {busy ? "Memproses..." : "Simpan"}
           </Button>
         </DialogFooter>
@@ -414,7 +414,7 @@ function AssignDialog({ ticket, onChanged }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-          <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-assign">
+          <Button onClick={submit} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="confirm-assign">
             {busy ? "Memproses..." : "Simpan"}
           </Button>
         </DialogFooter>

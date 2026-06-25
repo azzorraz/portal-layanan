@@ -55,7 +55,7 @@ export default function KnowledgeBase() {
           <p className="text-sm text-zinc-500 mt-1">Solusi cepat untuk pertanyaan umum dan panduan penggunaan layanan Dapodik.</p>
         </div>
         {isKoor && (
-          <Button onClick={() => navigate("/kb/new")} className="bg-zinc-950 hover:bg-zinc-800" data-testid="kb-new-button">
+          <Button onClick={() => navigate("/kb/new")} className="bg-blue-600 hover:bg-blue-700" data-testid="kb-new-button">
             <Plus className="h-4 w-4 mr-1.5" /> Tulis Artikel
           </Button>
         )}
@@ -81,7 +81,7 @@ export default function KnowledgeBase() {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={load} className="bg-zinc-950 hover:bg-zinc-800 h-10" data-testid="kb-search-button">Cari</Button>
+          <Button onClick={load} className="bg-blue-600 hover:bg-blue-700 h-10" data-testid="kb-search-button">Cari</Button>
         </div>
       </Card>
 

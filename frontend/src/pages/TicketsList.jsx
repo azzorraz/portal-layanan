@@ -145,7 +145,7 @@ export default function TicketsList() {
           <p className="text-sm text-zinc-500 mt-1">{total} pengajuan ditemukan</p>
         </div>
         {user?.role === "operator" && (
-          <Button asChild className="bg-zinc-950 hover:bg-zinc-800">
+          <Button asChild className="bg-blue-600 hover:bg-blue-700">
             <Link to="/tickets/new" data-testid="tickets-new-button">
               <Plus className="h-4 w-4 mr-1.5" /> Buat Pengajuan
             </Link>
@@ -222,7 +222,7 @@ export default function TicketsList() {
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Sampai</Label>
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-10 mt-1" data-testid="filter-to-date" />
           </div>
-          <Button onClick={load} className="bg-zinc-950 hover:bg-zinc-800 h-10" data-testid="apply-filter-button">
+          <Button onClick={load} className="bg-blue-600 hover:bg-blue-700 h-10" data-testid="apply-filter-button">
             <Filter className="h-4 w-4 mr-1.5" /> Terapkan
           </Button>
           {hasFilter && (
@@ -276,7 +276,7 @@ export default function TicketsList() {
                 <tr><td colSpan={isKoor ? 8 : 6} className="px-4 py-16 text-center">
                   <div className="text-zinc-500 text-sm">Belum ada pengajuan</div>
                   {user?.role === "operator" && (
-                    <Button asChild className="mt-3 bg-zinc-950 hover:bg-zinc-800" size="sm">
+                    <Button asChild className="mt-3 bg-blue-600 hover:bg-blue-700" size="sm">
                       <Link to="/tickets/new">Buat pengajuan pertama</Link>
                     </Button>
                   )}
@@ -414,7 +414,7 @@ function BulkAssignDialog({ ticketIds, onDone }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-          <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-bulk-assign">
+          <Button onClick={submit} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="confirm-bulk-assign">
             {busy ? "Memproses..." : `Tugaskan ${ticketIds.length} Tiket`}
           </Button>
         </DialogFooter>
@@ -467,7 +467,7 @@ function BulkPriorityDialog({ ticketIds, onDone }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-          <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-bulk-priority">
+          <Button onClick={submit} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="confirm-bulk-priority">
             {busy ? "Memproses..." : `Terapkan ke ${ticketIds.length} Tiket`}
           </Button>
         </DialogFooter>
@@ -559,7 +559,7 @@ function BulkStatusDialog({ ticketIds, onDone }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-zinc-950 hover:bg-zinc-800" data-testid="bulk-status-button">
+        <Button size="sm" className="bg-blue-600 hover:bg-blue-700" data-testid="bulk-status-button">
           <Workflow className="h-3.5 w-3.5 mr-1.5" /> Ubah Status
         </Button>
       </DialogTrigger>
@@ -585,7 +585,7 @@ function BulkStatusDialog({ ticketIds, onDone }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-          <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-bulk-status">
+          <Button onClick={submit} disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="confirm-bulk-status">
             {busy ? "Memproses..." : `Terapkan ke ${ticketIds.length} Tiket`}
           </Button>
         </DialogFooter>

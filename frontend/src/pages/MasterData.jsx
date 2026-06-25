@@ -41,7 +41,7 @@ function KecamatanTab() {
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Nama Kecamatan</Label>
             <Input value={nama} onChange={(e) => setNama(e.target.value)} required className="h-10 mt-1" data-testid="kecamatan-name-input" />
           </div>
-          <Button type="submit" className="bg-zinc-950 hover:bg-zinc-800" data-testid="add-kecamatan-button"><Plus className="h-4 w-4 mr-1.5" />Tambah</Button>
+          <Button type="submit" className="bg-blue-600 hover:bg-blue-700" data-testid="add-kecamatan-button"><Plus className="h-4 w-4 mr-1.5" />Tambah</Button>
         </form>
       </Card>
       <Card className="border-zinc-200 shadow-none">
@@ -113,7 +113,7 @@ function LayananTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openNew} className="bg-zinc-950 hover:bg-zinc-800" data-testid="add-layanan-button"><Plus className="h-4 w-4 mr-1.5" /> Tambah Layanan</Button>
+        <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700" data-testid="add-layanan-button"><Plus className="h-4 w-4 mr-1.5" /> Tambah Layanan</Button>
       </div>
       <Card className="border-zinc-200 shadow-none overflow-hidden">
         <table className="w-full text-sm">
@@ -243,7 +243,7 @@ function LayananTab() {
                       <Input value={newField.options} onChange={(e) => setNewField({ ...newField, options: e.target.value })} placeholder="opsi1, opsi2, opsi3" className="h-9 md:col-span-2" data-testid="new-field-options" />
                     )}
                     <Input value={newField.help_text} onChange={(e) => setNewField({ ...newField, help_text: e.target.value })} placeholder="Petunjuk (opsional)" className="h-9 md:col-span-2" />
-                    <Button type="button" onClick={addField} className="md:col-span-2 bg-zinc-950 hover:bg-zinc-800" data-testid="add-field-button">
+                    <Button type="button" onClick={addField} className="md:col-span-2 bg-blue-600 hover:bg-blue-700" data-testid="add-field-button">
                       <Plus className="h-3.5 w-3.5 mr-1.5" /> Tambah Field
                     </Button>
                   </div>
@@ -253,7 +253,7 @@ function LayananTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={save} className="bg-zinc-950 hover:bg-zinc-800" data-testid="save-layanan-button">Simpan</Button>
+            <Button onClick={save} className="bg-blue-600 hover:bg-blue-700" data-testid="save-layanan-button">Simpan</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -284,7 +284,7 @@ function SekolahTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openNew} className="bg-zinc-950 hover:bg-zinc-800" data-testid="add-sekolah-button"><Plus className="h-4 w-4 mr-1.5" />Tambah Sekolah</Button>
+        <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700" data-testid="add-sekolah-button"><Plus className="h-4 w-4 mr-1.5" />Tambah Sekolah</Button>
       </div>
       <Card className="border-zinc-200 shadow-none overflow-hidden">
         <table className="w-full text-sm">
@@ -345,7 +345,7 @@ function SekolahTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={save} className="bg-zinc-950 hover:bg-zinc-800" data-testid="save-sekolah-button">Simpan</Button>
+            <Button onClick={save} className="bg-blue-600 hover:bg-blue-700" data-testid="save-sekolah-button">Simpan</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -383,7 +383,7 @@ function OperatorTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openNew} className="bg-zinc-950 hover:bg-zinc-800" data-testid="add-operator-button"><Plus className="h-4 w-4 mr-1.5" />Tambah Operator</Button>
+        <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700" data-testid="add-operator-button"><Plus className="h-4 w-4 mr-1.5" />Tambah Operator</Button>
       </div>
       <Card className="border-zinc-200 shadow-none overflow-hidden">
         <table className="w-full text-sm">
@@ -441,7 +441,7 @@ function OperatorTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={save} className="bg-zinc-950 hover:bg-zinc-800" data-testid="save-operator-button">Simpan</Button>
+            <Button onClick={save} className="bg-blue-600 hover:bg-blue-700" data-testid="save-operator-button">Simpan</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -261,7 +261,7 @@ export default function CreateTicket() {
 
           <div className="flex items-center justify-end gap-3 pt-2 border-t border-zinc-100">
             <Button type="button" variant="outline" onClick={() => nav(-1)}>Batal</Button>
-            <Button type="submit" disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="submit-ticket-button">
+            <Button type="submit" disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="submit-ticket-button">
               {busy ? "Mengirim..." : "Kirim Pengajuan"}
             </Button>
           </div>

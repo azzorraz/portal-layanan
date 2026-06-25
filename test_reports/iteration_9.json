@@ -1,0 +1,40 @@
+{
+  "summary": "Phase 9 (Rebrand 'Portal Layanan Dapodik' + NPSN-based operator auth + admin@dapodik.id koord + blue theme) verified end-to-end. Backend: 10/10 new pytest tests in /app/backend/tests/test_phase9_auth.py pass — operator NPSN login (20220001/20220002/20220003 each with password '123456' returning role=operator + sekolah_id + non-empty token); koord login admin@dapodik.id/admin123 returns role=koordinator; legacy koordinator@dapodik.id/koordinator123 → 401 (account deactivated by seed); unknown NPSN → 401 with detail 'Username/NPSN atau password salah'; correct NPSN + wrong password → 401; correct admin email + wrong password → 401; /api/auth/me after operator login returns enriched sekolah.npsn=20220001; regression POST /api/tickets without attachments on a service with attachment_required=true still returns 400 with 'lampiran' message. Phase 8 regression suite (test_attachment_required.py) updated to new {identifier,password} payload — 13/13 still pass (full suite 23/23). Frontend live verification on https://dapodik-approval.preview.emergentagent.com: brand 'Portal Layanan Dapodik' visible on /login with blue DP logo (bg-blue-600); both data-testid login-mode-operator and login-mode-koordinator tabs render; default tab = Operator; Operator tab shows label 'NPSN Sekolah', placeholder 'Contoh: 20220001', hint 'Password default: 123456'; Koordinator tab shows label 'Email Koordinator', placeholder 'admin@dapodik.id', NO password hint; submit button computed bg = rgb(37,99,235) = blue-600 (hover blue-700 in className); right visual pane bg = rgb(30,58,138) = blue-900; operator login (20220001/123456) → redirected /dashboard with toast 'Berhasil masuk', header shows 'Budi Santoso • SDN 01 Bogor Tengah', avatar 'BS' bg=blue-600, active sidebar link 'Dashboard' bg=blue-600 text-white, sidebar brand 'Portal Layanan' + 'DAPODIK' rendered; koord login (admin@dapodik.id/admin123) → /dashboard, sidebar shows admin menu: Dashboard, Tickets, Knowledge Base, Laporan, Dashboard Pimpinan, Master Data, Log Aktivitas; legacy koord login attempt shows red error box with 'Username/NPSN atau password salah' and stays on /login; /master → Layanan & SLA tab visible with 11 default layanan rows + Edit buttons (attachment toggle present per Phase 8); operator /tickets/new loads with 11 services in dropdown and 'Kirim Pengajuan' button is blue. Tab title verified 'Portal Layanan Dapodik — One Stop Service' AFTER one frontend restart (initial response served stale cached HTML 'Dapodik Ticketing — Sistem Manajemen Approval Layanan Dapodik' — fixed by `supervisorctl restart frontend`).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Koord Dashboard", "issues": ["Carry-over from Phase 8: recharts width(-1)/height(-1) warnings on first paint (cosmetic, charts render OK)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase9_auth.py",
+    "/app/backend/tests/test_attachment_required.py",
+    "/app/test_reports/pytest/phase9_results.xml"
+  ],
+  "action_items": [
+    "(none required for Phase 9) — All review_request items pass.",
+    "Note for future deploys: Index.html title change requires `supervisorctl restart frontend` because react-scripts caches the static HTML in memory; hot-reload doesn't pick it up. I have restarted; verified now serving correct title. Main agent should be aware for any future public/index.html edits.",
+    "Carry-over: Executive.jsx handleResend should also onRefresh() on catch path. server.py is 2042 lines — modular split still pending. recharts warnings cosmetic."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:246 LoginIn is a BACKWARD-INCOMPATIBLE schema change ('email' → 'identifier'). All in-repo callers updated (AuthContext.jsx sends identifier; phase8 test file updated by me). External integrations (if any) calling POST /api/auth/login with {email,password} would now receive 422. Acceptable per user spec.",
+    "/app/backend/server.py:560 NPSN lookup uses `db.sekolah.find_one({'npsn': ident})` — case-sensitive exact match. Acceptable because NPSN is numeric. Note: if two operators share same sekolah_id, find_one returns first match (non-deterministic). Currently 1 operator per sekolah by seed, fine.",
+    "/app/backend/server.py:1973-1977 deactivate_many uses email:{$ne: admin_email} — only deactivates koordinators OTHER than the new admin and only if currently active. Idempotent on restart. Legacy 'koordinator@dapodik.id' confirmed active=false in live DB (login returns 401).",
+    "/app/backend/server.py:2013-2018 elif `not verify_password(operator_default_pass, ...)` resets to default ONLY if current password is not already '123456'. Idempotent; won't churn hash on every startup.",
+    "Login.jsx:14 mode default = 'operator' ✅. submit() trims identifier before sending. Tab switch clears identifier and error — UX correct.",
+    "Layout.jsx active link uses bg-blue-600 text-white (verified live). Avatar initials box bg-blue-600 (verified rgb(37,99,235))."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase9_auth.py (NEW — 10 tests, all passing)",
+    "/app/backend/tests/test_attachment_required.py (UPDATED — login payload migrated from {email,password} to {identifier,password}; OPERATOR_EMAIL→OPERATOR_NPSN='20220001'; KOORD_EMAIL→'admin@dapodik.id'; KOORD_PASS→'admin123')"
+  ],
+  "success_rate": {"backend": "100% (23/23 — 10 phase9 + 13 phase8 regression)", "frontend": "100% of Phase 9 review_request UI bullets"},
+  "test_credentials": "Operator: NPSN 20220001/123456 (Budi, sekolah_id=SDN 01 Bogor Tengah). Koord: admin@dapodik.id / admin123. Legacy koordinator@dapodik.id is inactive (cannot login).",
+  "seed_data_creation": "No persistent seed data created. Phase 9 backend tests don't write tickets to DB (one TEST_PHASE9 ticket attempted via 400 path didn't persist). Phase 8 test cleanup endpoint still invoked at module teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 9 done. Login endpoint now uses {identifier, password} (NOT {email, password}). Operator login = NPSN, Koord login = email containing '@'. Default operator password is '123456'. Admin koord = admin@dapodik.id/admin123 (NOT 'koordinator@dapodik.id' which is deactivated). Frontend brand 'Portal Layanan Dapodik' everywhere; blue-600 is primary accent (buttons, active sidebar, avatar, DP logo); blue-900 right login pane. If editing /app/frontend/public/index.html in future, run `sudo supervisorctl restart frontend` to flush cached HTML.",
+  "rca of the issue": "N/A — no functional issues. One transient observation: index.html title appeared stale on first curl/page-load before frontend restart, even though file on disk was already correct. RCA: react-scripts dev server caches the compiled public/index.html in memory; hot-reload watches src/ but not public/. Fix: `supervisorctl restart frontend`. Already executed by testing agent; live verified."
+}

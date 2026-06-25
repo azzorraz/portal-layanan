@@ -17,10 +17,10 @@ load_dotenv("/app/frontend/.env")
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
-OPERATOR_EMAIL = "operator1@dapodik.id"
-OPERATOR_PASS = "operator123"
-KOORD_EMAIL = "koordinator@dapodik.id"
-KOORD_PASS = "koordinator123"
+OPERATOR_NPSN = "20220001"
+OPERATOR_PASS = "123456"
+KOORD_EMAIL = "admin@dapodik.id"
+KOORD_PASS = "admin123"
 
 ATTACHMENT_REQUIRED_NAMES = {
     "Approval Penugasan Kepala Sekolah",
@@ -45,15 +45,15 @@ DEFAULT_SERVICE_NAMES = {
 }
 
 
-def _login(email, password):
-    r = requests.post(f"{API}/auth/login", json={"email": email, "password": password}, timeout=15)
-    assert r.status_code == 200, f"login failed for {email}: {r.status_code} {r.text}"
+def _login(identifier, password):
+    r = requests.post(f"{API}/auth/login", json={"identifier": identifier, "password": password}, timeout=15)
+    assert r.status_code == 200, f"login failed for {identifier}: {r.status_code} {r.text}"
     return r.json()["token"]
 
 
 @pytest.fixture(scope="module")
 def operator_token():
-    return _login(OPERATOR_EMAIL, OPERATOR_PASS)
+    return _login(OPERATOR_NPSN, OPERATOR_PASS)
 
 
 @pytest.fixture(scope="module")

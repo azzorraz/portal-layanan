@@ -114,7 +114,7 @@ export default function ChangePassword() {
                 placeholder="08xxxxxxxxxx" className="h-10 flex-1"
                 data-testid="koord-phone-input"
               />
-              <Button onClick={saveKoordPhone} disabled={savingPhone} className="bg-zinc-950 hover:bg-zinc-800" data-testid="save-koord-phone">
+              <Button onClick={saveKoordPhone} disabled={savingPhone} className="bg-blue-600 hover:bg-blue-700" data-testid="save-koord-phone">
                 {savingPhone ? "..." : "Simpan"}
               </Button>
             </div>
@@ -148,7 +148,7 @@ export default function ChangePassword() {
           </div>
           <div className="pt-2 border-t border-zinc-100 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => nav(-1)}>Batal</Button>
-            <Button type="submit" disabled={busyPwd} className="bg-zinc-950 hover:bg-zinc-800" data-testid="submit-change-password">
+            <Button type="submit" disabled={busyPwd} className="bg-blue-600 hover:bg-blue-700" data-testid="submit-change-password">
               {busyPwd ? "Memproses..." : "Simpan Password Baru"}
             </Button>
           </div>

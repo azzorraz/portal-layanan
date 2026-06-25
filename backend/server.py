@@ -244,7 +244,7 @@ def doc_to_public(doc: dict, drop: tuple = ("password_hash",)) -> dict:
 
 # ---------- Pydantic Schemas ----------
 class LoginIn(BaseModel):
-    email: EmailStr
+    identifier: str  # email (untuk koordinator) atau NPSN (untuk operator)
     password: str
 
 
@@ -550,9 +550,18 @@ async def enrich_ticket(t: dict) -> dict:
 # ---------- Auth Endpoints ----------
 @api.post("/auth/login")
 async def login(payload: LoginIn, response: Response):
-    user = await db.users.find_one({"email": payload.email.lower()})
+    ident = (payload.identifier or "").strip()
+    user = None
+    if "@" in ident:
+        # email-based login (koordinator)
+        user = await db.users.find_one({"email": ident.lower()})
+    else:
+        # NPSN-based login (operator) — look up sekolah by NPSN, then find linked operator
+        sek = await db.sekolah.find_one({"npsn": ident})
+        if sek:
+            user = await db.users.find_one({"sekolah_id": str(sek["_id"]), "role": "operator"})
     if not user or not user.get("active", True) or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Email atau password salah")
+        raise HTTPException(status_code=401, detail="Username/NPSN atau password salah")
     user_id = str(user["_id"])
     token = create_access_token(user_id, user["email"], user["role"])
     response.set_cookie(
@@ -1958,8 +1967,14 @@ async def seed():
     elif not verify_password(admin_pass, existing["password_hash"]):
         await db.users.update_one(
             {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_pass)}},
+            {"$set": {"password_hash": hash_password(admin_pass), "active": True}},
         )
+
+    # Deactivate legacy koordinator accounts (selain admin baru)
+    await db.users.update_many(
+        {"role": "koordinator", "email": {"$ne": admin_email}, "active": True},
+        {"$set": {"active": False}},
+    )
 
     # sample sekolah + operators
     sample_sekolah = [
@@ -1976,22 +1991,31 @@ async def seed():
         else:
             sekolah_ids.append(str(existing["_id"]))
 
+    # default operator password (login pakai NPSN)
+    operator_default_pass = os.environ.get("OPERATOR_DEFAULT_PASSWORD", "123456")
     sample_ops = [
-        {"name": "Budi Santoso", "email": "operator1@dapodik.id", "password": "operator123", "sekolah_id": sekolah_ids[0]},
-        {"name": "Siti Aminah", "email": "operator2@dapodik.id", "password": "operator123", "sekolah_id": sekolah_ids[1]},
-        {"name": "Ahmad Rifai", "email": "operator3@dapodik.id", "password": "operator123", "sekolah_id": sekolah_ids[2]},
+        {"name": "Budi Santoso", "email": "operator1@dapodik.id", "sekolah_id": sekolah_ids[0]},
+        {"name": "Siti Aminah", "email": "operator2@dapodik.id", "sekolah_id": sekolah_ids[1]},
+        {"name": "Ahmad Rifai", "email": "operator3@dapodik.id", "sekolah_id": sekolah_ids[2]},
     ]
     for op in sample_ops:
-        if not await db.users.find_one({"email": op["email"]}):
+        existing_op = await db.users.find_one({"email": op["email"]})
+        if not existing_op:
             await db.users.insert_one({
                 "name": op["name"],
                 "email": op["email"],
-                "password_hash": hash_password(op["password"]),
+                "password_hash": hash_password(operator_default_pass),
                 "role": "operator",
                 "sekolah_id": op["sekolah_id"],
                 "active": True,
                 "created_at": iso(now_utc()),
             })
+        elif not verify_password(operator_default_pass, existing_op["password_hash"]):
+            # Reset default operator password to NPSN-login default
+            await db.users.update_one(
+                {"_id": existing_op["_id"]},
+                {"$set": {"password_hash": hash_password(operator_default_pass)}},
+            )
 
     logger.info("Seed complete")
 

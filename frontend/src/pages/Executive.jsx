@@ -76,7 +76,7 @@ export default function Executive() {
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Sampai</Label>
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 mt-1" data-testid="exec-to" />
           </div>
-          <button onClick={load} className="h-10 px-4 rounded-md bg-zinc-950 hover:bg-zinc-800 text-white text-sm font-medium" data-testid="exec-apply">Terapkan</button>
+          <button onClick={load} className="h-10 px-4 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium" data-testid="exec-apply">Terapkan</button>
         </div>
       </div>
 
