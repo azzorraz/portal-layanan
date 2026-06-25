@@ -7,9 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Trash2, Pencil, Plus, GripVertical, Settings2 } from "lucide-react";
+import { Trash2, Pencil, Plus, GripVertical, Settings2, MessageSquareWarning, Wrench, Send } from "lucide-react";
 import { toast } from "sonner";
 
 function SectionHeader({ title, action }) {
@@ -442,10 +442,16 @@ function OperatorTab() {
 export default function MasterData() {
   return (
     <div className="space-y-6">
-      <div>
-        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-semibold">Admin</div>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Master Data</h1>
-        <p className="text-sm text-zinc-500 mt-1">Kelola sekolah, operator, layanan, kecamatan, dan SLA.</p>
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-semibold">Admin</div>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Master Data</h1>
+          <p className="text-sm text-zinc-500 mt-1">Kelola sekolah, operator, layanan, kecamatan, dan SLA.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <WhatsAppTestDialog />
+          <CleanupTestTicketsDialog />
+        </div>
       </div>
       <Tabs defaultValue="layanan">
         <TabsList>
@@ -460,5 +466,118 @@ export default function MasterData() {
         <TabsContent value="kecamatan" className="mt-4"><KecamatanTab /></TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function WhatsAppTestDialog() {
+  const [open, setOpen] = useState(false);
+  const [target, setTarget] = useState("");
+  const [message, setMessage] = useState("Tes notifikasi WhatsApp dari Dapodik Ticketing.");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const submit = async () => {
+    if (!target.trim()) { toast.error("Nomor WhatsApp wajib diisi"); return; }
+    setBusy(true); setResult(null);
+    try {
+      const { data } = await api.post("/admin/test-whatsapp", { target, message });
+      setResult(data);
+      if (data.status) toast.success("WA test terkirim ke antrian");
+      else toast.error(data.detail || "Gagal mengirim");
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" data-testid="open-wa-test"><Send className="h-3.5 w-3.5 mr-1.5" />Tes WA</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Tes Integrasi WhatsApp (Fonnte)</DialogTitle>
+          <DialogDescription>Kirim pesan tes untuk memastikan token Fonnte aktif dan device terhubung.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">Nomor WhatsApp Tujuan</Label>
+            <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="08xxxxxxxxxx" className="h-10 mt-1" data-testid="wa-test-target" />
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">Pesan</Label>
+            <Input value={message} onChange={(e) => setMessage(e.target.value)} className="h-10 mt-1" data-testid="wa-test-message" />
+          </div>
+          {result && (
+            <div className={`text-xs rounded-md border px-3 py-2 ${result.status ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"}`} data-testid="wa-test-result">
+              <div className="font-medium">{result.status ? "Terkirim ke antrian Fonnte" : "Gagal"}</div>
+              {result.detail && <div className="font-mono text-[11px] mt-1 break-words">{String(result.detail)}</div>}
+              {result.quota && (
+                <div className="mt-1 text-[11px] text-zinc-700">
+                  Sisa quota: {Object.values(result.quota)[0]?.remaining ?? "—"}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Tutup</Button>
+          <Button onClick={submit} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700" data-testid="wa-test-send">
+            {busy ? "Mengirim..." : "Kirim Tes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CleanupTestTicketsDialog() {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const submit = async () => {
+    setBusy(true); setResult(null);
+    try {
+      const { data } = await api.post("/admin/cleanup-test-tickets");
+      setResult(data);
+      toast.success(`${data.deleted} tiket dihapus`);
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setResult(null); }}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="border-red-200 text-red-700 hover:bg-red-50" data-testid="open-cleanup-tests">
+          <Wrench className="h-3.5 w-3.5 mr-1.5" />Cleanup TEST_
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="text-red-700 flex items-center gap-2">
+            <MessageSquareWarning className="h-4 w-4" /> Hapus Tiket Testing
+          </DialogTitle>
+          <DialogDescription>
+            Menghapus tiket dengan judul/deskripsi diawali <span className="font-mono">TEST_</span>, <span className="font-mono">TEST-</span>, atau mengandung <span className="font-mono">playwright</span> (case-insensitive). Lampiran, aktivitas, dan notifikasi terkait ikut terhapus.
+          </DialogDescription>
+        </DialogHeader>
+        {result && (
+          <div className="text-sm rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2" data-testid="cleanup-result">
+            <div className="font-medium">{result.deleted} tiket dihapus</div>
+            {result.tickets?.length > 0 && (
+              <div className="font-mono text-[11px] mt-1 break-words text-emerald-800">
+                {result.tickets.slice(0, 10).join(", ")}{result.tickets.length > 10 ? "..." : ""}
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Tutup</Button>
+          <Button onClick={submit} disabled={busy} className="bg-red-600 hover:bg-red-700 text-white" data-testid="confirm-cleanup-tests">
+            {busy ? "Memproses..." : "Hapus Sekarang"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

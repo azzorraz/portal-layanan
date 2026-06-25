@@ -17,6 +17,7 @@ const ENTITY_LABEL = {
   ticket: { label: "Ticket", icon: Activity, cls: "bg-zinc-100 text-zinc-700 border-zinc-200" },
   kb_article: { label: "KB Artikel", icon: BookOpen, cls: "bg-orange-50 text-orange-700 border-orange-200" },
   kb_category: { label: "KB Kategori", icon: BookOpen, cls: "bg-orange-50 text-orange-700 border-orange-200" },
+  system: { label: "System", icon: ShieldCheck, cls: "bg-zinc-100 text-zinc-700 border-zinc-200" },
 };
 
 const ACTION_LABEL = {
@@ -29,10 +30,12 @@ const ACTION_LABEL = {
   bulk_status: { label: "Bulk Status", cls: "bg-amber-50 text-amber-700 border-amber-300" },
   bulk_priority: { label: "Bulk Priority", cls: "bg-blue-50 text-blue-700 border-blue-300" },
   bulk_delete: { label: "Bulk Delete", cls: "bg-red-50 text-red-700 border-red-300" },
+  cleanup_test: { label: "Cleanup TEST", cls: "bg-zinc-100 text-zinc-700 border-zinc-300" },
+  test_whatsapp: { label: "Test WA", cls: "bg-emerald-50 text-emerald-700 border-emerald-300" },
 };
 
-const ENTITIES = ["sekolah", "operator", "layanan", "kecamatan", "ticket", "kb_article", "kb_category"];
-const ACTIONS = ["create", "update", "delete", "status_change", "assign", "bulk_assign", "bulk_status", "bulk_priority", "bulk_delete"];
+const ENTITIES = ["sekolah", "operator", "layanan", "kecamatan", "ticket", "kb_article", "kb_category", "system"];
+const ACTIONS = ["create", "update", "delete", "status_change", "assign", "bulk_assign", "bulk_status", "bulk_priority", "bulk_delete", "cleanup_test", "test_whatsapp"];
 
 export default function AuditLog() {
   const [items, setItems] = useState([]);

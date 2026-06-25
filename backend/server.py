@@ -27,6 +27,14 @@ from auth import (
     get_current_user,
     require_role,
 )
+from fonnte import (
+    send_whatsapp,
+    send_whatsapp_many,
+    msg_ticket_created,
+    msg_status_change,
+    msg_new_comment,
+    msg_bulk_status,
+)
 
 # ---------- Setup ----------
 mongo_url = os.environ["MONGO_URL"]
@@ -724,7 +732,17 @@ async def create_ticket(payload: TicketCreate, user: dict = Depends(get_current_
         await notify(str(k["_id"]), tid, "Pengajuan Baru", f"{ticket_number} - {payload.judul}")
 
     saved = await db.tickets.find_one({"_id": res.inserted_id})
-    return await _enrich_one(saved)
+    enriched = await _enrich_one(saved)
+
+    # WhatsApp confirmation to operator
+    phone = (saved.get("form_data") or {}).get("no_whatsapp")
+    if phone:
+        try:
+            await send_whatsapp(phone, msg_ticket_created(saved))
+        except Exception as e:
+            logger.warning("WA notify (created) failed: %s", e)
+
+    return enriched
 
 
 @api.get("/tickets")
@@ -811,6 +829,15 @@ async def change_status(tid: str, payload: StatusChange, user: dict = Depends(re
     await log_audit(user, "ticket", tid, "status_change", f"{t['ticket_number']}: {old} → {payload.status}", {"catatan": payload.catatan})
     await notify(t["operator_id"], tid, "Status Pengajuan Diperbarui", f"{t['ticket_number']}: {payload.status}")
     saved = await db.tickets.find_one({"_id": ObjectId(tid)})
+
+    # WhatsApp notify to operator
+    phone = (saved.get("form_data") or {}).get("no_whatsapp")
+    if phone:
+        try:
+            await send_whatsapp(phone, msg_status_change(saved, old, payload.status, payload.catatan))
+        except Exception as e:
+            logger.warning("WA notify (status) failed: %s", e)
+
     return await _enrich_one(saved)
 
 
@@ -828,6 +855,13 @@ async def add_comment(tid: str, payload: CommentIn, user: dict = Depends(get_cur
             await notify(str(k["_id"]), tid, "Komentar baru dari operator", f"{t['ticket_number']}")
     else:
         await notify(t["operator_id"], tid, "Komentar baru dari koordinator", f"{t['ticket_number']}")
+        # WhatsApp: koordinator → operator
+        phone = (t.get("form_data") or {}).get("no_whatsapp")
+        if phone:
+            try:
+                await send_whatsapp(phone, msg_new_comment(t, user.get("name") or "Koordinator", payload.content))
+            except Exception as e:
+                logger.warning("WA notify (comment) failed: %s", e)
     return {"ok": True}
 
 
@@ -969,6 +1003,7 @@ async def bulk_assign(payload: BulkAssignIn, user: dict = Depends(require_role("
 @api.post("/tickets/bulk-status")
 async def bulk_status(payload: BulkStatusIn, user: dict = Depends(require_role("koordinator"))):
     updated = 0
+    wa_targets: list[tuple[str, dict]] = []  # (phone, ticket)
     for tid in payload.ticket_ids:
         try:
             oid = ObjectId(tid)
@@ -989,14 +1024,24 @@ async def bulk_status(payload: BulkStatusIn, user: dict = Depends(require_role("
             msg += f" — {payload.catatan}"
         await log_activity(tid, user, "status_change", msg, {"from": old, "to": payload.status, "catatan": payload.catatan, "bulk": True})
         await notify(t["operator_id"], tid, "Status Pengajuan Diperbarui", f"{t['ticket_number']}: {payload.status}")
+        phone = (t.get("form_data") or {}).get("no_whatsapp")
+        if phone:
+            wa_targets.append((phone, t))
         updated += 1
+
+    # Send WhatsApp per ticket so message includes ticket-specific number
+    for phone, t in wa_targets:
+        try:
+            await send_whatsapp(phone, msg_bulk_status({**t, "status": payload.status}, payload.status))
+        except Exception as e:
+            logger.warning("WA bulk-status notify failed: %s", e)
 
     await log_audit(
         user, "ticket", None, "bulk_status",
         f"Bulk status change {updated} tiket → {payload.status}",
-        {"count": updated, "status": payload.status, "catatan": payload.catatan, "ticket_ids": payload.ticket_ids[:50]},
+        {"count": updated, "status": payload.status, "catatan": payload.catatan, "ticket_ids": payload.ticket_ids[:50], "wa_sent": len(wa_targets)},
     )
-    return {"ok": True, "updated": updated}
+    return {"ok": True, "updated": updated, "wa_sent": len(wa_targets)}
 
 
 @api.post("/tickets/bulk-delete")
@@ -1295,6 +1340,53 @@ async def executive_stats(
 async def list_koordinators(_: dict = Depends(require_role("koordinator"))):
     items = await db.users.find({"role": "koordinator"}).sort("name", 1).to_list(200)
     return [doc_to_public(i) for i in items]
+
+
+# ---------- Admin Maintenance ----------
+class WhatsAppTestIn(BaseModel):
+    target: str
+    message: Optional[str] = None
+
+
+@api.post("/admin/test-whatsapp")
+async def admin_test_wa(payload: WhatsAppTestIn, user: dict = Depends(require_role("koordinator"))):
+    """Send a test WhatsApp message to verify Fonnte connectivity."""
+    msg = payload.message or "Tes notifikasi Dapodik Ticketing. Jika Anda menerima ini, integrasi WhatsApp aktif."
+    result = await send_whatsapp(payload.target, msg)
+    await log_audit(user, "system", None, "test_whatsapp", f"Test WA → {payload.target[-4:]}", {"result_status": result.get("status")})
+    return result
+
+
+@api.post("/admin/cleanup-test-tickets")
+async def cleanup_test_tickets(user: dict = Depends(require_role("koordinator"))):
+    """Delete tickets created by tests (judul/ticket_number starts with TEST_ or TEST-,
+    or operator email contains 'test'). Cascades to activities, attachments, notifications."""
+    test_filter = {
+        "$or": [
+            {"judul": {"$regex": "^TEST[_\\- ]", "$options": "i"}},
+            {"judul": {"$regex": "playwright", "$options": "i"}},
+            {"deskripsi": {"$regex": "^TEST[_\\- ]", "$options": "i"}},
+        ]
+    }
+    to_delete = await db.tickets.find(test_filter, {"_id": 1, "ticket_number": 1}).to_list(5000)
+    ids = [d["_id"] for d in to_delete]
+    str_ids = [str(_id) for _id in ids]
+    numbers = [d.get("ticket_number") for d in to_delete]
+
+    if not ids:
+        return {"deleted": 0, "tickets": []}
+
+    await db.tickets.delete_many({"_id": {"$in": ids}})
+    await db.activities.delete_many({"ticket_id": {"$in": str_ids}})
+    await db.attachments.delete_many({"ticket_id": {"$in": str_ids}})
+    await db.notifications.delete_many({"ticket_id": {"$in": str_ids}})
+
+    await log_audit(
+        user, "ticket", None, "cleanup_test",
+        f"Cleanup {len(ids)} test ticket(s)",
+        {"count": len(ids), "ticket_numbers": numbers[:50]},
+    )
+    return {"deleted": len(ids), "tickets": numbers}
 
 
 # ---------- Dashboard ----------

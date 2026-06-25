@@ -1,0 +1,39 @@
+{
+  "summary": "Phase 5 (Fonnte WhatsApp integration + admin maintenance) tested end-to-end. Backend: 25/25 pytest passing in /app/backend/tests/test_phase5.py. Frontend: all UI selectors verified on production URL (https://dapodik-approval.preview.emergentagent.com). Live Fonnte send returned 'success! message in queue, Sisa quota: 956' confirming real integration is live and quota-tracked.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_phase5.py",
+    "/app/test_reports/pytest/phase5_results.xml"
+  ],
+  "action_items": [
+    "(carry-over) server.py is now ~1708 lines — consider splitting into modules (auth, tickets, layanan, kb, audit, admin, executive, fonnte_handlers).",
+    "(hygiene) /api/audit endpoint path is plain '/audit' (not '/audit-logs'). Consider documenting in API contract.",
+    "(optional) test_audit_log_test_whatsapp_entry depends on prior test_koord_success_does_not_500 having persisted a log within same session — currently passes because pytest-xdist loadscope keeps the class on one worker. Document the dependency or use class-scoped fixture.",
+    "Live Fonnte token is enabled with real quota — recommend FONNTE_ENABLED=false in non-prod environments to prevent accidental sends. CI/CD pipelines must mock the helper.",
+    "test_create_ticket_with_no_whatsapp_succeeds returned a non-None value (warning only, no failure) — minor lint."
+  ],
+  "critical_code_review_comments": [
+    "fonnte.py: send_whatsapp is fail-soft — no exception leaks. Verified disabled-mode and missing-token both return {status: False, skipped: True} without network call. Good.",
+    "normalize_phone correctly strips non-digits; returns None on empty/non-digit input. countryCode passed to Fonnte from env (default 62). Good.",
+    "Templates msg_ticket_created / msg_status_change / msg_new_comment / msg_bulk_status all include the ticket_number string and truncate body content via _short helper to avoid oversized WA payloads. Good.",
+    "POST /api/admin/test-whatsapp uses require_role('koordinator') → operator gets 403 ✓. Audit log entry 'test_whatsapp' on entity 'system' is created with last-4-digit phone redaction. Good.",
+    "POST /api/admin/cleanup-test-tickets uses regex ^TEST[_\\- ] case-insensitive on judul+deskripsi plus 'playwright' anywhere. Cascades to db.activities + db.attachments + db.notifications using str(_id) match. Single audit_log entry with count + ticket_numbers[:50] cap. Good.",
+    "Trigger wiring in server.py verified: create_ticket (line 741), change_status (line 837), add_comment for role=koordinator only (line 862), bulk_status per-ticket loop (line 1035). All wrapped or guarded so Fonnte exceptions cannot 500 the parent request.",
+    "MasterData.jsx: both koord-only buttons (open-wa-test, open-cleanup-tests) and dialogs with proper data-testid set on every interactive control (wa-test-target/message/send/result and confirm-cleanup-tests/cleanup-result). Good.",
+    "AuditLog.jsx: ACTIONS list includes 'cleanup_test' and 'test_whatsapp'; ENTITIES list includes 'system'; ACTION_LABEL maps to 'Cleanup TEST' / 'Test WA'. Confirmed visible on /audit page. Good.",
+    "Operator role guard: /master redirects operator to /dashboard (verified via Playwright — URL after goto resolves to /dashboard, no koord buttons rendered). Good.",
+    "MINOR: prioritas enum is ['Rendah','Normal','Tinggi','Mendesak'] — there is NO 'Sedang' value, despite prior phases sometimes referring to it. This is a backend Literal constraint; frontend already uses 'Normal' as default. No bug.",
+    "MINOR: /api/audit returns {items, total} (paginated) — frontend code in AuditLog.jsx must handle the wrapped shape. Verified working."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase5.py (NEW — 25 tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% of Phase 5 review_request bullets verified"},
+  "test_credentials": "koordinator@dapodik.id/koordinator123 + operator1@dapodik.id/operator123 — both working",
+  "seed_data_creation": "Created and then cleaned 5 TEST_PHASE5_* tickets via operator1 during trigger tests; session-scoped final_cleanup fixture calls /api/admin/cleanup-test-tickets at end of run. DB clean post-test (Playwright cleanup-result showed '0 tiket dihapus' on the UI run because backend tests had already purged).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 5 fully functional. Confirmed selectors: open-wa-test, wa-test-target, wa-test-message, wa-test-send, wa-test-result, open-cleanup-tests, confirm-cleanup-tests, cleanup-result. Audit endpoint path = /api/audit (returns {items,total}). Executive stats path = /api/executive/stats. Prioritas literal values = Rendah|Normal|Tinggi|Mendesak (NOT 'Sedang'). FONNTE_API_TOKEN is set to a real working token with ~956 quota remaining; live test confirmed message-in-queue at api.fonnte.com. To avoid spending quota in future runs, use FONNTE_ENABLED=false env override or monkeypatch fonnte.send_whatsapp.",
+  "rca of the issue": "N/A — all Phase 5 functionality verified working. Initial test failures were entirely test-script side: wrong endpoint paths (/audit-logs→/audit, /executive/kpi→/executive/stats), wrong prioritas literal ('Sedang'→'Normal'), and pytest-asyncio not installed so async tests were rewritten to use asyncio.run(). After fixes: 25/25 passing in 12.5s."
+}
