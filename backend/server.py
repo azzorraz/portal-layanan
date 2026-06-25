@@ -45,17 +45,28 @@ PRIORITIES = ["Rendah", "Normal", "Tinggi", "Mendesak"]
 ROLES = ["operator", "koordinator"]
 
 DEFAULT_SERVICES = [
-    ("Approval Perubahan Status Kepegawaian Dapodik", 5),
-    ("Approval Request Hapus Akun PTK", 2),
-    ("Approval Permintaan Reset Akun PTK", 1),
-    ("Approval Permintaan Reset Akun Sekolah", 1),
-    ("Approval Input Siswa Pindah Rombel", 3),
-    ("Approval Perubahan Jabatan PTK", 3),
-    ("Approval Input Siswa Baru", 3),
-    ("Approval Penugasan Kepala Sekolah", 5),
-    ("Approval Pengajuan Mutasi Guru", 3),
-    ("Approval Input Jam Tambahan di Sekolah Lain", 3),
-    ("Approval Input Kenaikan Gaji Berkala atau Kenaikan Pangkat", 5),
+    ("Approval Perubahan Status Kepegawaian Dapodik", 5,
+     ["SK Mutasi / Perubahan Status", "Surat Permohonan dari Kepala Sekolah", "Fotokopi SK Terakhir"]),
+    ("Approval Request Hapus Akun PTK", 2,
+     ["Surat Permohonan Penghapusan", "Bukti PTK Sudah Tidak Aktif"]),
+    ("Approval Permintaan Reset Akun PTK", 1,
+     ["Surat Permohonan dari Kepala Sekolah", "Fotokopi KTP PTK", "Fotokopi SK / Tunjangan PTK"]),
+    ("Approval Permintaan Reset Akun Sekolah", 1,
+     ["Surat Permohonan ber-kop Sekolah", "Fotokopi SK Kepala Sekolah"]),
+    ("Approval Input Siswa Pindah Rombel", 3,
+     ["Surat Permohonan Pindah Rombel", "Daftar Siswa Pindah"]),
+    ("Approval Perubahan Jabatan PTK", 3,
+     ["SK Jabatan Baru", "Surat Permohonan"]),
+    ("Approval Input Siswa Baru", 3,
+     ["Daftar Siswa Baru (Excel)", "Akte Kelahiran (kolektif)", "Surat Pernyataan Kepala Sekolah"]),
+    ("Approval Penugasan Kepala Sekolah", 5,
+     ["SK Penugasan Kepala Sekolah", "Surat Tugas dari Dinas"]),
+    ("Approval Pengajuan Mutasi Guru", 3,
+     ["SK Mutasi", "Surat Permohonan dari Sekolah Asal", "Surat Persetujuan Sekolah Tujuan"]),
+    ("Approval Input Jam Tambahan di Sekolah Lain", 3,
+     ["Surat Tugas Jam Tambahan", "Jadwal Mengajar"]),
+    ("Approval Input Kenaikan Gaji Berkala atau Kenaikan Pangkat", 5,
+     ["SK Kenaikan Gaji/Pangkat", "Fotokopi SK Pangkat Sebelumnya"]),
 ]
 
 DEFAULT_KECAMATAN = ["Bogor Tengah", "Bogor Utara", "Bogor Selatan", "Bogor Barat", "Bogor Timur", "Tanah Sareal"]
@@ -123,6 +134,7 @@ class LayananIn(BaseModel):
     nama: str
     sla_days: int = Field(ge=1, le=60)
     deskripsi: Optional[str] = None
+    checklist: List[str] = []
 
 
 class AttachmentIn(BaseModel):
@@ -131,12 +143,38 @@ class AttachmentIn(BaseModel):
     data_base64: str  # raw base64 (no data: prefix)
 
 
+class ChecklistItem(BaseModel):
+    label: str
+    checked: bool = False
+
+
 class TicketCreate(BaseModel):
     layanan_id: str
     judul: str
     deskripsi: str
     prioritas: Literal["Rendah", "Normal", "Tinggi", "Mendesak"] = "Normal"
     attachments: List[AttachmentIn] = []
+    checklist_state: List[ChecklistItem] = []
+
+
+class AssignIn(BaseModel):
+    assignee_id: Optional[str] = None
+
+
+class ChecklistUpdate(BaseModel):
+    items: List[ChecklistItem]
+
+
+class KbCategoryIn(BaseModel):
+    nama: str
+    deskripsi: Optional[str] = None
+
+
+class KbArticleIn(BaseModel):
+    title: str
+    kategori: Optional[str] = None
+    content: str
+    tags: List[str] = []
 
 
 class StatusChange(BaseModel):
@@ -181,6 +219,21 @@ async def notify(user_id: str, ticket_id: Optional[str], title: str, body: str):
         "title": title,
         "body": body,
         "read": False,
+        "created_at": iso(now_utc()),
+    })
+
+
+async def log_audit(actor: dict, entity: str, entity_id: Optional[str], action: str, summary: str, meta: Optional[dict] = None):
+    """Append-only audit log of admin / system actions."""
+    await db.audit_logs.insert_one({
+        "actor_id": actor.get("id"),
+        "actor_name": actor.get("name", actor.get("email")),
+        "actor_role": actor.get("role"),
+        "entity": entity,            # e.g. "sekolah", "operator", "layanan", "kecamatan", "ticket", "kb_article"
+        "entity_id": entity_id,
+        "action": action,            # e.g. "create", "update", "delete", "status_change", "assign"
+        "summary": summary,
+        "meta": meta or {},
         "created_at": iso(now_utc()),
     })
 
@@ -273,17 +326,21 @@ async def list_kecamatan(_: dict = Depends(get_current_user)):
 
 
 @api.post("/kecamatan")
-async def create_kecamatan(payload: KecamatanIn, _: dict = Depends(require_role("koordinator"))):
+async def create_kecamatan(payload: KecamatanIn, user: dict = Depends(require_role("koordinator"))):
     exists = await db.kecamatan.find_one({"nama": payload.nama})
     if exists:
         raise HTTPException(status_code=400, detail="Kecamatan sudah ada")
     res = await db.kecamatan.insert_one({"nama": payload.nama, "created_at": iso(now_utc())})
+    await log_audit(user, "kecamatan", str(res.inserted_id), "create", f"Kecamatan '{payload.nama}' ditambahkan")
     return doc_to_public(await db.kecamatan.find_one({"_id": res.inserted_id}))
 
 
 @api.delete("/kecamatan/{kid}")
-async def delete_kecamatan(kid: str, _: dict = Depends(require_role("koordinator"))):
+async def delete_kecamatan(kid: str, user: dict = Depends(require_role("koordinator"))):
+    doc = await db.kecamatan.find_one({"_id": ObjectId(kid)})
     await db.kecamatan.delete_one({"_id": ObjectId(kid)})
+    if doc:
+        await log_audit(user, "kecamatan", kid, "delete", f"Kecamatan '{doc.get('nama')}' dihapus")
     return {"ok": True}
 
 
@@ -300,22 +357,27 @@ async def list_sekolah(q: Optional[str] = None, kecamatan: Optional[str] = None,
 
 
 @api.post("/sekolah")
-async def create_sekolah(payload: SekolahIn, _: dict = Depends(require_role("koordinator"))):
+async def create_sekolah(payload: SekolahIn, user: dict = Depends(require_role("koordinator"))):
     doc = payload.model_dump()
     doc["created_at"] = iso(now_utc())
     res = await db.sekolah.insert_one(doc)
+    await log_audit(user, "sekolah", str(res.inserted_id), "create", f"Sekolah '{payload.nama}' ditambahkan")
     return doc_to_public(await db.sekolah.find_one({"_id": res.inserted_id}))
 
 
 @api.put("/sekolah/{sid}")
-async def update_sekolah(sid: str, payload: SekolahIn, _: dict = Depends(require_role("koordinator"))):
+async def update_sekolah(sid: str, payload: SekolahIn, user: dict = Depends(require_role("koordinator"))):
     await db.sekolah.update_one({"_id": ObjectId(sid)}, {"$set": {**payload.model_dump(), "updated_at": iso(now_utc())}})
+    await log_audit(user, "sekolah", sid, "update", f"Sekolah '{payload.nama}' diperbarui")
     return doc_to_public(await db.sekolah.find_one({"_id": ObjectId(sid)}))
 
 
 @api.delete("/sekolah/{sid}")
-async def delete_sekolah(sid: str, _: dict = Depends(require_role("koordinator"))):
+async def delete_sekolah(sid: str, user: dict = Depends(require_role("koordinator"))):
+    doc = await db.sekolah.find_one({"_id": ObjectId(sid)})
     await db.sekolah.delete_one({"_id": ObjectId(sid)})
+    if doc:
+        await log_audit(user, "sekolah", sid, "delete", f"Sekolah '{doc.get('nama')}' dihapus")
     return {"ok": True}
 
 
@@ -342,7 +404,7 @@ async def list_operators(q: Optional[str] = None, _: dict = Depends(require_role
 
 
 @api.post("/operators")
-async def create_operator(payload: OperatorIn, _: dict = Depends(require_role("koordinator"))):
+async def create_operator(payload: OperatorIn, user: dict = Depends(require_role("koordinator"))):
     email_low = payload.email.lower()
     if await db.users.find_one({"email": email_low}):
         raise HTTPException(status_code=400, detail="Email sudah terdaftar")
@@ -363,11 +425,12 @@ async def create_operator(payload: OperatorIn, _: dict = Depends(require_role("k
         "created_at": iso(now_utc()),
     }
     res = await db.users.insert_one(doc)
+    await log_audit(user, "operator", str(res.inserted_id), "create", f"Operator '{payload.name}' ({email_low}) ditambahkan")
     return doc_to_public(await db.users.find_one({"_id": res.inserted_id}))
 
 
 @api.put("/operators/{uid}")
-async def update_operator(uid: str, payload: OperatorUpdate, _: dict = Depends(require_role("koordinator"))):
+async def update_operator(uid: str, payload: OperatorUpdate, user: dict = Depends(require_role("koordinator"))):
     update: dict = {}
     data = payload.model_dump(exclude_unset=True)
     if "password" in data and data["password"]:
@@ -392,12 +455,17 @@ async def update_operator(uid: str, payload: OperatorUpdate, _: dict = Depends(r
         if clash:
             raise HTTPException(status_code=400, detail="Email sudah terdaftar")
     await db.users.update_one({"_id": ObjectId(uid)}, {"$set": update})
-    return doc_to_public(await db.users.find_one({"_id": ObjectId(uid)}))
+    after = await db.users.find_one({"_id": ObjectId(uid)})
+    await log_audit(user, "operator", uid, "update", f"Operator '{(after or {}).get('name')}' diperbarui")
+    return doc_to_public(after)
 
 
 @api.delete("/operators/{uid}")
-async def delete_operator(uid: str, _: dict = Depends(require_role("koordinator"))):
+async def delete_operator(uid: str, user: dict = Depends(require_role("koordinator"))):
+    doc = await db.users.find_one({"_id": ObjectId(uid), "role": "operator"})
     await db.users.delete_one({"_id": ObjectId(uid), "role": "operator"})
+    if doc:
+        await log_audit(user, "operator", uid, "delete", f"Operator '{doc.get('name')}' dihapus")
     return {"ok": True}
 
 
@@ -448,6 +516,13 @@ async def create_ticket(payload: TicketCreate, user: dict = Depends(get_current_
     ticket_number = await next_ticket_number()
     due_at = iso(submitted_at + timedelta(days=int(layanan.get("sla_days", 3))))
 
+    # Build checklist state: use submitted state if present, else seed from layanan.checklist
+    checklist_items: List[dict] = []
+    if payload.checklist_state:
+        checklist_items = [{"label": c.label, "checked": c.checked} for c in payload.checklist_state]
+    elif isinstance(layanan.get("checklist"), list):
+        checklist_items = [{"label": label, "checked": False} for label in layanan["checklist"]]
+
     doc = {
         "ticket_number": ticket_number,
         "judul": payload.judul,
@@ -467,6 +542,9 @@ async def create_ticket(payload: TicketCreate, user: dict = Depends(get_current_
         "created_at": iso(submitted_at),
         "updated_at": iso(submitted_at),
         "closed_at": None,
+        "assignee_id": None,
+        "assignee_name": None,
+        "checklist": checklist_items,
     }
     res = await db.tickets.insert_one(doc)
     tid = str(res.inserted_id)
@@ -572,6 +650,7 @@ async def change_status(tid: str, payload: StatusChange, user: dict = Depends(re
     if payload.catatan:
         msg += f" — {payload.catatan}"
     await log_activity(tid, user, "status_change", msg, {"from": old, "to": payload.status, "catatan": payload.catatan})
+    await log_audit(user, "ticket", tid, "status_change", f"{t['ticket_number']}: {old} → {payload.status}", {"catatan": payload.catatan})
     await notify(t["operator_id"], tid, "Status Pengajuan Diperbarui", f"{t['ticket_number']}: {payload.status}")
     saved = await db.tickets.find_one({"_id": ObjectId(tid)})
     return await _enrich_one(saved)
@@ -649,6 +728,289 @@ async def list_notifications(user: dict = Depends(get_current_user)):
 async def mark_read(user: dict = Depends(get_current_user)):
     await db.notifications.update_many({"user_id": user["id"], "read": False}, {"$set": {"read": True}})
     return {"ok": True}
+
+
+# ---------- Ticket Assignment & Checklist ----------
+@api.post("/tickets/{tid}/assign")
+async def assign_ticket(tid: str, payload: AssignIn, user: dict = Depends(require_role("koordinator"))):
+    t = await db.tickets.find_one({"_id": ObjectId(tid)})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket tidak ditemukan")
+    assignee_name = None
+    if payload.assignee_id:
+        a = await db.users.find_one({"_id": ObjectId(payload.assignee_id), "role": "koordinator"})
+        if not a:
+            raise HTTPException(status_code=404, detail="Petugas tidak ditemukan")
+        assignee_name = a.get("name") or a.get("email")
+    await db.tickets.update_one(
+        {"_id": ObjectId(tid)},
+        {"$set": {"assignee_id": payload.assignee_id, "assignee_name": assignee_name, "updated_at": iso(now_utc())}},
+    )
+    msg = f"Tugas dialihkan ke {assignee_name}" if assignee_name else "Penugasan dilepas"
+    await log_activity(tid, user, "assign", msg, {"assignee_id": payload.assignee_id, "assignee_name": assignee_name})
+    await log_audit(user, "ticket", tid, "assign", f"{t['ticket_number']}: {msg}")
+    if payload.assignee_id and payload.assignee_id != user["id"]:
+        await notify(payload.assignee_id, tid, "Ticket Ditugaskan", f"{t['ticket_number']} - {t['judul']}")
+    saved = await db.tickets.find_one({"_id": ObjectId(tid)})
+    return await _enrich_one(saved)
+
+
+@api.post("/tickets/{tid}/checklist")
+async def update_checklist(tid: str, payload: ChecklistUpdate, user: dict = Depends(get_current_user)):
+    t = await db.tickets.find_one({"_id": ObjectId(tid)})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket tidak ditemukan")
+    if user["role"] == "operator" and t.get("operator_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Akses ditolak")
+    items = [{"label": c.label, "checked": c.checked} for c in payload.items]
+    await db.tickets.update_one(
+        {"_id": ObjectId(tid)},
+        {"$set": {"checklist": items, "updated_at": iso(now_utc())}},
+    )
+    await log_activity(tid, user, "checklist", f"Checklist diperbarui ({sum(1 for i in items if i['checked'])}/{len(items)} selesai)")
+    saved = await db.tickets.find_one({"_id": ObjectId(tid)})
+    return await _enrich_one(saved)
+
+
+# ---------- Knowledge Base ----------
+@api.get("/kb/categories")
+async def kb_list_categories(_: dict = Depends(get_current_user)):
+    items = await db.kb_categories.find().sort("nama", 1).to_list(200)
+    return [doc_to_public(i) for i in items]
+
+
+@api.post("/kb/categories")
+async def kb_create_category(payload: KbCategoryIn, user: dict = Depends(require_role("koordinator"))):
+    if await db.kb_categories.find_one({"nama": payload.nama}):
+        raise HTTPException(status_code=400, detail="Kategori sudah ada")
+    res = await db.kb_categories.insert_one({**payload.model_dump(), "created_at": iso(now_utc())})
+    await log_audit(user, "kb_category", str(res.inserted_id), "create", f"Kategori KB '{payload.nama}' ditambahkan")
+    return doc_to_public(await db.kb_categories.find_one({"_id": res.inserted_id}))
+
+
+@api.delete("/kb/categories/{cid}")
+async def kb_delete_category(cid: str, user: dict = Depends(require_role("koordinator"))):
+    doc = await db.kb_categories.find_one({"_id": ObjectId(cid)})
+    await db.kb_categories.delete_one({"_id": ObjectId(cid)})
+    if doc:
+        await log_audit(user, "kb_category", cid, "delete", f"Kategori KB '{doc.get('nama')}' dihapus")
+    return {"ok": True}
+
+
+@api.get("/kb/articles")
+async def kb_list_articles(
+    q: Optional[str] = None,
+    kategori: Optional[str] = None,
+    _: dict = Depends(get_current_user),
+):
+    filt: dict = {}
+    if q:
+        filt["$or"] = [
+            {"title": {"$regex": q, "$options": "i"}},
+            {"content": {"$regex": q, "$options": "i"}},
+            {"tags": {"$regex": q, "$options": "i"}},
+        ]
+    if kategori:
+        filt["kategori"] = kategori
+    items = await db.kb_articles.find(filt, {"content": 0}).sort("updated_at", -1).limit(200).to_list(200)
+    return [doc_to_public(i) for i in items]
+
+
+@api.get("/kb/articles/{aid}")
+async def kb_get_article(aid: str, user: dict = Depends(get_current_user)):
+    doc = await db.kb_articles.find_one({"_id": ObjectId(aid)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Artikel tidak ditemukan")
+    # increment view count (non-blocking)
+    await db.kb_articles.update_one({"_id": ObjectId(aid)}, {"$inc": {"views": 1}})
+    doc["views"] = (doc.get("views") or 0) + 1
+    return doc_to_public(doc)
+
+
+@api.post("/kb/articles")
+async def kb_create_article(payload: KbArticleIn, user: dict = Depends(require_role("koordinator"))):
+    doc = {
+        **payload.model_dump(),
+        "author_id": user["id"],
+        "author_name": user.get("name"),
+        "views": 0,
+        "created_at": iso(now_utc()),
+        "updated_at": iso(now_utc()),
+    }
+    res = await db.kb_articles.insert_one(doc)
+    await log_audit(user, "kb_article", str(res.inserted_id), "create", f"Artikel KB '{payload.title}' ditambahkan")
+    return doc_to_public(await db.kb_articles.find_one({"_id": res.inserted_id}))
+
+
+@api.put("/kb/articles/{aid}")
+async def kb_update_article(aid: str, payload: KbArticleIn, user: dict = Depends(require_role("koordinator"))):
+    await db.kb_articles.update_one(
+        {"_id": ObjectId(aid)},
+        {"$set": {**payload.model_dump(), "updated_at": iso(now_utc())}},
+    )
+    await log_audit(user, "kb_article", aid, "update", f"Artikel KB '{payload.title}' diperbarui")
+    return doc_to_public(await db.kb_articles.find_one({"_id": ObjectId(aid)}))
+
+
+@api.delete("/kb/articles/{aid}")
+async def kb_delete_article(aid: str, user: dict = Depends(require_role("koordinator"))):
+    doc = await db.kb_articles.find_one({"_id": ObjectId(aid)})
+    await db.kb_articles.delete_one({"_id": ObjectId(aid)})
+    if doc:
+        await log_audit(user, "kb_article", aid, "delete", f"Artikel KB '{doc.get('title')}' dihapus")
+    return {"ok": True}
+
+
+# ---------- Audit Log ----------
+@api.get("/audit")
+async def list_audit(
+    q: Optional[str] = None,
+    entity: Optional[str] = None,
+    action: Optional[str] = None,
+    actor_id: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    limit: int = 100,
+    skip: int = 0,
+    _: dict = Depends(require_role("koordinator")),
+):
+    filt: dict = {}
+    if entity:
+        filt["entity"] = entity
+    if action:
+        filt["action"] = action
+    if actor_id:
+        filt["actor_id"] = actor_id
+    if q:
+        filt["$or"] = [
+            {"summary": {"$regex": q, "$options": "i"}},
+            {"actor_name": {"$regex": q, "$options": "i"}},
+        ]
+    if from_date or to_date:
+        rng: dict = {}
+        if from_date:
+            rng["$gte"] = from_date
+        if to_date:
+            rng["$lte"] = to_date + "T23:59:59"
+        filt["created_at"] = rng
+    total = await db.audit_logs.count_documents(filt)
+    items = await db.audit_logs.find(filt).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    return {"items": [doc_to_public(i) for i in items], "total": total}
+
+
+# ---------- Executive (Dashboard Pimpinan) ----------
+@api.get("/executive/stats")
+async def executive_stats(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    _: dict = Depends(require_role("koordinator")),
+):
+    base: dict = {}
+    if from_date or to_date:
+        rng: dict = {}
+        if from_date:
+            rng["$gte"] = from_date
+        if to_date:
+            rng["$lte"] = to_date + "T23:59:59"
+        base["submitted_at"] = rng
+
+    total = await db.tickets.count_documents(base)
+    selesai = await db.tickets.count_documents({**base, "status": {"$in": ["Selesai", "Disetujui"]}})
+    ditolak = await db.tickets.count_documents({**base, "status": "Ditolak"})
+    diproses = await db.tickets.count_documents({**base, "status": {"$in": ["Diajukan", "Diproses", "Menunggu Dokumen", "Revisi"]}})
+
+    # by kecamatan
+    pipeline_kec = [
+        {"$match": base},
+        {"$group": {"_id": "$kecamatan", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]
+    by_kecamatan = []
+    async for row in db.tickets.aggregate(pipeline_kec):
+        by_kecamatan.append({"kecamatan": row["_id"] or "—", "count": row["count"]})
+
+    # by layanan
+    pipeline_lay = [
+        {"$match": base},
+        {"$group": {"_id": "$layanan_nama", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]
+    by_layanan = []
+    async for row in db.tickets.aggregate(pipeline_lay):
+        by_layanan.append({"layanan": row["_id"] or "—", "count": row["count"]})
+
+    # top sekolah
+    pipeline_sek = [
+        {"$match": base},
+        {"$group": {"_id": "$sekolah_nama", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ]
+    top_sekolah = []
+    async for row in db.tickets.aggregate(pipeline_sek):
+        top_sekolah.append({"sekolah": row["_id"] or "—", "count": row["count"]})
+
+    # avg processing time (hours) for closed tickets
+    closed = await db.tickets.find(
+        {**base, "closed_at": {"$ne": None}, "submitted_at": {"$ne": None}},
+        {"submitted_at": 1, "closed_at": 1, "layanan_nama": 1, "sla_days": 1},
+    ).to_list(5000)
+    total_h = 0.0
+    n = 0
+    sla_met = 0
+    per_layanan_durations: dict = {}
+    for t in closed:
+        try:
+            s = datetime.fromisoformat(t["submitted_at"])
+            c = datetime.fromisoformat(t["closed_at"])
+            hours = (c - s).total_seconds() / 3600
+            total_h += hours
+            n += 1
+            sla_h = float(t.get("sla_days") or 3) * 24
+            if hours <= sla_h:
+                sla_met += 1
+            key = t.get("layanan_nama") or "—"
+            per_layanan_durations.setdefault(key, []).append(hours)
+        except Exception:
+            continue
+    avg_hours = round(total_h / n, 1) if n else 0
+    sla_compliance = round((sla_met / n) * 100, 1) if n else 0
+    avg_per_layanan = [
+        {"layanan": k, "avg_hours": round(sum(v) / len(v), 1), "count": len(v)}
+        for k, v in per_layanan_durations.items()
+    ]
+    avg_per_layanan.sort(key=lambda x: x["avg_hours"], reverse=True)
+
+    # workload per koordinator (assigned)
+    pipeline_assignee = [
+        {"$match": {**base, "assignee_id": {"$ne": None}}},
+        {"$group": {"_id": {"id": "$assignee_id", "name": "$assignee_name"}, "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]
+    workload = []
+    async for row in db.tickets.aggregate(pipeline_assignee):
+        workload.append({"assignee_id": row["_id"]["id"], "assignee_name": row["_id"]["name"], "count": row["count"]})
+
+    return {
+        "total": total,
+        "selesai": selesai,
+        "ditolak": ditolak,
+        "diproses": diproses,
+        "by_kecamatan": by_kecamatan,
+        "by_layanan": by_layanan,
+        "top_sekolah": top_sekolah,
+        "avg_processing_hours": avg_hours,
+        "sla_compliance_pct": sla_compliance,
+        "avg_per_layanan": avg_per_layanan[:8],
+        "workload": workload,
+    }
+
+
+# ---------- Koordinator list (for assignment) ----------
+@api.get("/koordinators")
+async def list_koordinators(_: dict = Depends(require_role("koordinator"))):
+    items = await db.users.find({"role": "koordinator"}).sort("name", 1).to_list(200)
+    return [doc_to_public(i) for i in items]
 
 
 # ---------- Dashboard ----------
@@ -865,6 +1227,10 @@ async def seed():
     await db.tickets.create_index([("operator_id", 1)])
     await db.activities.create_index([("ticket_id", 1), ("created_at", 1)])
     await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+    await db.audit_logs.create_index([("created_at", -1)])
+    await db.audit_logs.create_index([("entity", 1), ("created_at", -1)])
+    await db.kb_articles.create_index([("updated_at", -1)])
+    await db.kb_articles.create_index([("title", "text"), ("content", "text"), ("tags", "text")])
 
     # kecamatan
     for k in DEFAULT_KECAMATAN:
@@ -872,9 +1238,15 @@ async def seed():
             await db.kecamatan.insert_one({"nama": k, "created_at": iso(now_utc())})
 
     # services
-    for nama, sla in DEFAULT_SERVICES:
-        if not await db.services.find_one({"nama": nama}):
-            await db.services.insert_one({"nama": nama, "sla_days": sla, "deskripsi": None, "created_at": iso(now_utc())})
+    for nama, sla, checklist in DEFAULT_SERVICES:
+        existing = await db.services.find_one({"nama": nama})
+        if not existing:
+            await db.services.insert_one({
+                "nama": nama, "sla_days": sla, "deskripsi": None,
+                "checklist": checklist, "created_at": iso(now_utc()),
+            })
+        elif "checklist" not in existing:
+            await db.services.update_one({"_id": existing["_id"]}, {"$set": {"checklist": checklist}})
 
     # admin koordinator
     admin_email = os.environ["ADMIN_EMAIL"].lower()

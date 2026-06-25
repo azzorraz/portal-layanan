@@ -13,6 +13,7 @@ import { fmtDateTime, relativeTime, STATUS_LIST } from "@/lib/format";
 import {
   ArrowLeft, Paperclip, MessageSquare, FileText, Calendar, Clock,
   ArrowRight, Upload, Download, Activity as ActivityIcon, User, AlertCircle,
+  UserCheck, ListChecks, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -25,6 +26,8 @@ function activityIcon(kind) {
   if (kind === "status_change") return ArrowRight;
   if (kind === "comment") return MessageSquare;
   if (kind === "attachment") return Paperclip;
+  if (kind === "assign") return UserCheck;
+  if (kind === "checklist") return ListChecks;
   return ActivityIcon;
 }
 
@@ -117,13 +120,16 @@ export default function TicketDetail() {
             </h1>
           </div>
           {user?.role === "koordinator" && (
-            <StatusChangeDialog ticket={ticket} onChanged={load} />
+            <div className="flex items-center gap-2">
+              <AssignDialog ticket={ticket} onChanged={load} />
+              <StatusChangeDialog ticket={ticket} onChanged={load} />
+            </div>
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main column: deskripsi + timeline */}
+        {/* Main column: deskripsi + checklist + timeline */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="border-zinc-200 shadow-none p-6">
             <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-zinc-500 mb-2">Deskripsi</div>
@@ -131,6 +137,10 @@ export default function TicketDetail() {
               {ticket.deskripsi}
             </div>
           </Card>
+
+          {ticket.checklist?.length > 0 && (
+            <ChecklistSection ticket={ticket} onChanged={load} canEdit={user?.role === "operator" && ticket.operator_id === user.id || user?.role === "koordinator"} />
+          )}
 
           <Card className="border-zinc-200 shadow-none p-6">
             <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-zinc-500 mb-4">Aktivitas</div>
@@ -201,6 +211,13 @@ export default function TicketDetail() {
               <div>
                 <dt className="text-xs text-zinc-500">Kecamatan</dt>
                 <dd className="text-zinc-900 mt-0.5">{ticket.kecamatan || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500">Petugas Penanganan</dt>
+                <dd className="text-zinc-900 mt-0.5 inline-flex items-center gap-1.5" data-testid="ticket-assignee">
+                  <UserCheck className="h-3.5 w-3.5 text-zinc-400" />
+                  {ticket.assignee_name || <span className="text-zinc-400">Belum ditugaskan</span>}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs text-zinc-500">Diajukan</dt>
@@ -308,5 +325,114 @@ function StatusChangeDialog({ ticket, onChanged }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AssignDialog({ ticket, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const [koords, setKoords] = useState([]);
+  const [assigneeId, setAssigneeId] = useState(ticket.assignee_id || "unassigned");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try { const { data } = await api.get("/koordinators"); setKoords(data); } catch { /* noop */ }
+    })();
+  }, [open]);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/tickets/${ticket.id}/assign`, { assignee_id: assigneeId === "unassigned" ? null : assigneeId });
+      toast.success("Petugas diperbarui");
+      setOpen(false);
+      onChanged();
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" data-testid="assign-button"><UserCheck className="h-4 w-4 mr-1.5" />Tugaskan</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Tugaskan Petugas</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">Petugas</Label>
+            <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <SelectTrigger className="h-10 mt-1" data-testid="assignee-select"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">— Tidak ditugaskan —</SelectItem>
+                {koords.map((k) => <SelectItem key={k.id} value={k.id}>{k.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
+          <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-assign">
+            {busy ? "Memproses..." : "Simpan"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ChecklistSection({ ticket, onChanged, canEdit }) {
+  const [items, setItems] = useState(ticket.checklist || []);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setItems(ticket.checklist || []); }, [ticket.checklist]);
+
+  const toggle = async (i) => {
+    if (!canEdit) return;
+    const next = items.map((c, idx) => idx === i ? { ...c, checked: !c.checked } : c);
+    setItems(next);
+    setBusy(true);
+    try {
+      await api.post(`/tickets/${ticket.id}/checklist`, { items: next });
+      onChanged();
+    } catch (e) { toast.error(apiError(e)); setItems(items); }
+    finally { setBusy(false); }
+  };
+
+  const completed = items.filter((c) => c.checked).length;
+  const pct = items.length ? Math.round((completed / items.length) * 100) : 0;
+
+  return (
+    <Card className="border-zinc-200 shadow-none p-6" data-testid="ticket-checklist">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-zinc-500">Checklist Dokumen</div>
+          <h3 className="font-display text-base font-medium tracking-tight text-zinc-900">
+            {completed} / {items.length} dokumen lengkap
+          </h3>
+        </div>
+        <div className="text-sm font-mono text-zinc-600">{pct}%</div>
+      </div>
+      <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden mb-4">
+        <div
+          className={`h-full transition-all ${pct === 100 ? "bg-emerald-500" : "bg-zinc-900"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="space-y-2">
+        {items.map((c, i) => (
+          <label key={i} className={`flex items-start gap-2 ${canEdit ? "cursor-pointer" : "cursor-default"}`}>
+            <input
+              type="checkbox" checked={c.checked} disabled={!canEdit || busy} onChange={() => toggle(i)}
+              className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+              data-testid={`detail-checklist-${i}`}
+            />
+            <span className={`text-sm ${c.checked ? "text-zinc-500 line-through" : "text-zinc-800"}`}>{c.label}</span>
+            {c.checked && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5" />}
+          </label>
+        ))}
+      </div>
+    </Card>
   );
 }

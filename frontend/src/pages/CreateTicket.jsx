@@ -48,6 +48,19 @@ export default function CreateTicket() {
   }, []);
 
   const selectedLayanan = layananOpts.find((l) => l.id === layananId);
+  const [checklistState, setChecklistState] = useState([]);
+
+  useEffect(() => {
+    if (selectedLayanan?.checklist?.length) {
+      setChecklistState(selectedLayanan.checklist.map((label) => ({ label, checked: false })));
+    } else {
+      setChecklistState([]);
+    }
+  }, [layananId, selectedLayanan]);
+
+  const toggleChecklist = (i) => {
+    setChecklistState((prev) => prev.map((c, idx) => (idx === i ? { ...c, checked: !c.checked } : c)));
+  };
 
   const onFiles = (e) => {
     const list = Array.from(e.target.files || []);
@@ -71,6 +84,7 @@ export default function CreateTicket() {
       }
       const { data } = await api.post("/tickets", {
         layanan_id: layananId, judul, deskripsi, prioritas, attachments,
+        checklist_state: checklistState,
       });
       toast.success(`Pengajuan dibuat: ${data.ticket_number}`);
       nav(`/tickets/${data.id}`);
@@ -108,6 +122,28 @@ export default function CreateTicket() {
               <div className="mt-2 text-xs text-zinc-500">SLA target: <span className="font-medium text-zinc-700">{selectedLayanan.sla_days} hari kerja</span></div>
             )}
           </div>
+
+          {checklistState.length > 0 && (
+            <div className="rounded-md border border-zinc-200 bg-zinc-50/50 p-4">
+              <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold mb-2">Checklist Dokumen Wajib</div>
+              <p className="text-xs text-zinc-500 mb-3">Pastikan dokumen berikut tersedia. Centang sebagai konfirmasi kelengkapan.</p>
+              <div className="space-y-2" data-testid="create-checklist">
+                {checklistState.map((c, i) => (
+                  <label key={i} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox" checked={c.checked} onChange={() => toggleChecklist(i)}
+                      className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                      data-testid={`checklist-item-${i}`}
+                    />
+                    <span className={`text-sm ${c.checked ? "text-zinc-500 line-through" : "text-zinc-800"}`}>{c.label}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="text-[11px] text-zinc-500 mt-3">
+                {checklistState.filter((c) => c.checked).length} / {checklistState.length} item dicentang
+              </div>
+            </div>
+          )}
 
           <div>
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Judul Pengajuan</Label>

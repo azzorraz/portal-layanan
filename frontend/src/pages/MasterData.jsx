@@ -71,12 +71,13 @@ function KecamatanTab() {
 function LayananTab() {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nama: "", sla_days: 3, deskripsi: "" });
+  const [form, setForm] = useState({ nama: "", sla_days: 3, deskripsi: "", checklist: [] });
   const [open, setOpen] = useState(false);
+  const [newChecklist, setNewChecklist] = useState("");
   const load = async () => { try { const { data } = await api.get("/layanan"); setItems(data); } catch (e) { toast.error(apiError(e)); } };
   useEffect(() => { load(); }, []);
-  const openNew = () => { setEditing(null); setForm({ nama: "", sla_days: 3, deskripsi: "" }); setOpen(true); };
-  const openEdit = (l) => { setEditing(l); setForm({ nama: l.nama, sla_days: l.sla_days, deskripsi: l.deskripsi || "" }); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ nama: "", sla_days: 3, deskripsi: "", checklist: [] }); setOpen(true); };
+  const openEdit = (l) => { setEditing(l); setForm({ nama: l.nama, sla_days: l.sla_days, deskripsi: l.deskripsi || "", checklist: l.checklist || [] }); setOpen(true); };
   const save = async () => {
     try {
       if (editing) await api.put(`/layanan/${editing.id}`, form);
@@ -127,6 +128,39 @@ function LayananTab() {
             <div>
               <Label className="text-xs uppercase tracking-wider text-zinc-500">Deskripsi</Label>
               <Input value={form.deskripsi} onChange={(e) => setForm({ ...form, deskripsi: e.target.value })} className="h-10 mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wider text-zinc-500">Checklist Dokumen Wajib</Label>
+              <div className="mt-1 space-y-1.5" data-testid="layanan-checklist-editor">
+                {form.checklist.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 rounded-md border border-zinc-200">
+                    <span className="text-xs text-zinc-400 font-mono w-5">{i + 1}.</span>
+                    <span className="flex-1 text-sm text-zinc-800">{c}</span>
+                    <button type="button" onClick={() => setForm({ ...form, checklist: form.checklist.filter((_, idx) => idx !== i) })} className="text-zinc-400 hover:text-red-600">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex gap-2">
+                  <Input
+                    value={newChecklist} onChange={(e) => setNewChecklist(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newChecklist.trim()) {
+                        e.preventDefault();
+                        setForm({ ...form, checklist: [...form.checklist, newChecklist.trim()] });
+                        setNewChecklist("");
+                      }
+                    }}
+                    placeholder="Tambah item checklist..." className="h-9" data-testid="layanan-checklist-input"
+                  />
+                  <Button type="button" variant="outline" className="h-9" onClick={() => {
+                    if (newChecklist.trim()) {
+                      setForm({ ...form, checklist: [...form.checklist, newChecklist.trim()] });
+                      setNewChecklist("");
+                    }
+                  }}><Plus className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>

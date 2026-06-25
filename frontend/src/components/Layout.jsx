@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Ticket, FileBarChart2, Settings2, LogOut, PlusCircle, KeyRound, ChevronDown,
+  Crown, BookOpen, ShieldCheck,
 } from "lucide-react";
 import NotificationsBell from "@/components/NotificationsBell";
 import {
@@ -62,13 +63,16 @@ export default function Layout() {
           {user?.role === "operator" && (
             <SideLink to="/tickets/new" icon={PlusCircle} label="Buat Pengajuan" testId="nav-new-ticket" />
           )}
+          <SideLink to="/kb" icon={BookOpen} label="Knowledge Base" testId="nav-kb" />
           {isKoor && <SideLink to="/reports" icon={FileBarChart2} label="Laporan" testId="nav-reports" />}
           {isKoor && (
             <>
               <div className="pt-4 px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400 font-semibold">
                 Admin
               </div>
+              <SideLink to="/executive" icon={Crown} label="Dashboard Pimpinan" testId="nav-executive" />
               <SideLink to="/master" icon={Settings2} label="Master Data" testId="nav-master" />
+              <SideLink to="/audit" icon={ShieldCheck} label="Log Aktivitas" testId="nav-audit" />
             </>
           )}
         </nav>

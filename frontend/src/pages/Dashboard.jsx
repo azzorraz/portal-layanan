@@ -13,6 +13,26 @@ import { STATUS_STYLES } from "@/lib/format";
 
 const SLOT_COLORS = ["#10b981", "#f59e0b", "#ef4444"];
 
+const SLA_TRAFFIC = {
+  emerald: { ring: "border-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", glow: "shadow-emerald-100" },
+  amber: { ring: "border-amber-200", bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", glow: "shadow-amber-100" },
+  red: { ring: "border-red-200", bg: "bg-red-50", text: "text-red-700", dot: "bg-red-500", glow: "shadow-red-100" },
+};
+
+function SlaTrafficCard({ color, label, value, hint, testId }) {
+  const c = SLA_TRAFFIC[color];
+  return (
+    <Card data-testid={testId} className={`p-5 border-2 ${c.ring} ${c.bg} shadow-none hover:shadow ${c.glow} transition-shadow`}>
+      <div className="flex items-center justify-between">
+        <div className={`text-[11px] uppercase tracking-[0.14em] font-semibold ${c.text}`}>{label}</div>
+        <span className={`w-2.5 h-2.5 rounded-full ${c.dot} animate-pulse`} />
+      </div>
+      <div className={`mt-3 font-display text-4xl font-semibold tracking-tight ${c.text}`}>{value}</div>
+      <div className="text-xs text-zinc-600 mt-1">{hint}</div>
+    </Card>
+  );
+}
+
 function StatCard({ icon: Icon, label, value, accent, testId, sublabel }) {
   return (
     <Card data-testid={testId} className="p-5 border-zinc-200 shadow-none hover:shadow-sm transition-shadow">
@@ -83,6 +103,34 @@ export default function Dashboard() {
         <StatCard testId="stat-revisi" icon={AlertTriangle} label="Revisi" value={stats.revisi} accent="bg-orange-50 text-orange-700" />
         <StatCard testId="stat-selesai" icon={CheckCircle2} label="Selesai" value={stats.selesai} accent="bg-emerald-50 text-emerald-700" />
         <StatCard testId="stat-ditolak" icon={XCircle} label="Ditolak" value={stats.ditolak} accent="bg-red-50 text-red-700" />
+      </div>
+
+      {/* SLA Traffic Light */}
+      <div>
+        <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-zinc-500 mb-3">SLA Indicator</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SlaTrafficCard
+            testId="sla-on-time"
+            color="emerald"
+            label="Tepat Waktu"
+            value={stats.sla.on_time}
+            hint="Pengajuan berjalan sesuai target SLA"
+          />
+          <SlaTrafficCard
+            testId="sla-almost"
+            color="amber"
+            label="Hampir Terlambat"
+            value={stats.sla.almost}
+            hint="Sisa waktu < 24 jam — perlu prioritas"
+          />
+          <SlaTrafficCard
+            testId="sla-late"
+            color="red"
+            label="Terlambat"
+            value={stats.sla.late}
+            hint="Sudah melewati batas SLA — eskalasi segera"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

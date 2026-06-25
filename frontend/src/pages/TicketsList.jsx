@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, apiError } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,10 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { StatusBadge, SlaBadge, PriorityBadge } from "@/components/Badges";
 import { STATUS_LIST, fmtDate } from "@/lib/format";
-import { Filter, Plus, Search, X } from "lucide-react";
+import { Filter, Loader2, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
+
+const PAGE_SIZE = 30;
 
 const SLA_OPTIONS = [
   { value: "all", label: "Semua SLA" },
@@ -25,7 +27,10 @@ export default function TicketsList() {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
+  const [skip, setSkip] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [layananId, setLayananId] = useState("all");
@@ -35,25 +40,45 @@ export default function TicketsList() {
   const [toDate, setToDate] = useState("");
   const [layananOpts, setLayananOpts] = useState([]);
   const [kecOpts, setKecOpts] = useState([]);
+  const sentinelRef = useRef(null);
+
+  const buildParams = (skipVal) => {
+    const params = { limit: PAGE_SIZE, skip: skipVal };
+    if (q) params.q = q;
+    if (status !== "all") params.status = status;
+    if (layananId !== "all") params.layanan_id = layananId;
+    if (kecamatan !== "all") params.kecamatan = kecamatan;
+    if (slaFilter !== "all") params.sla_filter = slaFilter;
+    if (fromDate) params.from_date = fromDate;
+    if (toDate) params.to_date = toDate;
+    return params;
+  };
 
   const load = async () => {
     setLoading(true);
     try {
-      const params = {};
-      if (q) params.q = q;
-      if (status !== "all") params.status = status;
-      if (layananId !== "all") params.layanan_id = layananId;
-      if (kecamatan !== "all") params.kecamatan = kecamatan;
-      if (slaFilter !== "all") params.sla_filter = slaFilter;
-      if (fromDate) params.from_date = fromDate;
-      if (toDate) params.to_date = toDate;
-      const { data } = await api.get("/tickets", { params });
-      setItems(data.items);
-      setTotal(data.total);
+      const { data } = await api.get("/tickets", { params: buildParams(0) });
+      setItems(data.items); setTotal(data.total); setSkip(data.items.length);
+      setHasMore(data.items.length === PAGE_SIZE);
     } catch (e) {
       toast.error(apiError(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const { data } = await api.get("/tickets", { params: buildParams(skip) });
+      setItems((prev) => [...prev, ...data.items]);
+      setSkip((s) => s + data.items.length);
+      setHasMore(data.items.length === PAGE_SIZE);
+    } catch (e) {
+      toast.error(apiError(e));
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -71,6 +96,18 @@ export default function TicketsList() {
   }, []);
 
   useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [status, layananId, kecamatan, slaFilter]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) loadMore();
+    }, { rootMargin: "300px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [hasMore, skip, loadingMore]);
 
   const hasFilter = status !== "all" || layananId !== "all" || kecamatan !== "all" || slaFilter !== "all" || fromDate || toDate || q;
 
@@ -222,7 +259,7 @@ export default function TicketsList() {
                   {user?.role === "koordinator" && (
                     <td className="px-4 py-3">
                       <div className="text-zinc-900">{t.sekolah_nama || "—"}</div>
-                      <div className="text-xs text-zinc-500">{t.operator_name}</div>
+                      <div className="text-xs text-zinc-500">{t.operator_name}{t.assignee_name ? ` • Petugas: ${t.assignee_name}` : ""}</div>
                     </td>
                   )}
                   <td className="px-4 py-3 text-zinc-600">{fmtDate(t.submitted_at)}</td>
@@ -234,6 +271,18 @@ export default function TicketsList() {
             </tbody>
           </table>
         </div>
+        {/* Infinite scroll sentinel */}
+        {items.length > 0 && (
+          <div ref={sentinelRef} className="py-4 text-center text-xs text-zinc-500" data-testid="infinite-scroll-sentinel">
+            {loadingMore ? (
+              <span className="inline-flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Memuat lebih banyak...</span>
+            ) : hasMore ? (
+              <button onClick={loadMore} className="hover:text-zinc-900" data-testid="load-more-button">Muat lebih banyak ({total - items.length} tersisa)</button>
+            ) : (
+              <span>Semua data dimuat • {items.length} dari {total}</span>
+            )}
+          </div>
+        )}
       </Card>
     </div>
   );
