@@ -261,8 +261,8 @@ function WhatsAppStats({ data }) {
         <Card className="lg:col-span-2 p-6 border-zinc-200 shadow-none">
           <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-zinc-500">Trend 14 Hari</div>
           <h3 className="font-display text-lg font-medium tracking-tight">Pesan WhatsApp per Hari</h3>
-          <div className="h-64 mt-2">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-64 mt-2 min-h-[16rem]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={200}>
               <LineChart data={data.timeline}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717a" }} tickLine={false} axisLine={{ stroke: "#e4e4e7" }} />
