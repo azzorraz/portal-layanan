@@ -72,6 +72,131 @@ DEFAULT_SERVICES = [
 DEFAULT_KECAMATAN = ["Bogor Tengah", "Bogor Utara", "Bogor Selatan", "Bogor Barat", "Bogor Timur", "Tanah Sareal"]
 
 
+# Common field templates (reused across schemas)
+def F(key, label, type_="text", required=True, options=None, help_text=None, placeholder=None):
+    f = {"key": key, "label": label, "type": type_, "required": required, "options": options or [], "help_text": help_text}
+    if placeholder:
+        f["placeholder"] = placeholder
+    return f
+
+
+COMMON_HEADER = [
+    F("nama_sekolah", "Nama Sekolah", "text", help_text="Otomatis terisi dari akun"),
+    F("nama_operator", "Nama Operator", "text", help_text="Otomatis terisi dari akun"),
+    F("no_whatsapp", "No WhatsApp Aktif Operator", "tel", placeholder="08xxxxxxxxxx"),
+]
+COMMON_HEADER_WITH_NPSN = [
+    F("nama_sekolah", "Nama Sekolah", "text", help_text="Otomatis terisi dari akun"),
+    F("npsn", "NPSN", "text", placeholder="20XXXXXX"),
+    F("nama_operator", "Nama Operator", "text", help_text="Otomatis terisi dari akun"),
+    F("no_whatsapp", "No WhatsApp Aktif Operator", "tel", placeholder="08xxxxxxxxxx"),
+]
+
+DEFAULT_FORM_SCHEMAS = {
+    "Approval Perubahan Status Kepegawaian Dapodik": COMMON_HEADER + [
+        F("nama_ptk", "Nama PTK Sesuai SK", "text"),
+        F("nip", "NIP", "text"),
+        F("nik", "NIK", "text", placeholder="16 digit NIK"),
+        F("no_sk", "No SK Pengangkatan", "text"),
+        F("tanggal_sk", "Tanggal Surat (SK)", "date"),
+        F("tmt_tugas", "TMT Tugas", "date"),
+        F("keterangan_perubahan", "Keterangan Perubahan", "textarea"),
+        F("upload_sk_ktp", "Upload SK dan KTP (jadi 1 PDF)", "text", required=False, help_text="Unggah file PDF pada bagian lampiran di bawah"),
+    ],
+    "Approval Request Hapus Akun PTK": COMMON_HEADER_WITH_NPSN + [
+        F("nama_gtk", "Nama GTK", "text"),
+        F("nip_gtk", "NIP GTK", "text"),
+        F("nik_gtk", "NIK GTK", "text"),
+        F("email_akun", "Email atau Akun yang Akan Dihapus", "email"),
+    ],
+    "Approval Permintaan Reset Akun PTK": COMMON_HEADER_WITH_NPSN + [
+        F("nama_gtk", "Nama GTK", "text"),
+        F("nip_gtk", "NIP GTK", "text"),
+        F("nik_gtk", "NIK GTK", "text"),
+        F("email_akun", "Email atau Akun yang Akan Direset", "email"),
+    ],
+    "Approval Permintaan Reset Akun Sekolah": [
+        F("nama_sekolah", "Nama Sekolah", "text", help_text="Otomatis terisi dari akun"),
+        F("npsn_npyp", "NPSN / NPYP", "text"),
+        F("nama_operator", "Nama Operator", "text", help_text="Otomatis terisi dari akun"),
+        F("no_whatsapp", "No WhatsApp Aktif Operator", "tel"),
+        F("email_akun", "Email atau Akun yang Akan Direset", "email"),
+        F("jenis_akun", "Jenis Akun", "select", options=["Akun Dapodik", "Akun SDM"]),
+    ],
+    "Approval Input Siswa Pindah Rombel": COMMON_HEADER_WITH_NPSN + [
+        F("nama_siswa", "Nama Lengkap Siswa", "text"),
+        F("nisn", "NISN", "text"),
+        F("nik", "NIK", "text"),
+        F("rombel_saat_ini", "Rombel Saat Ini", "text"),
+        F("rombel_tujuan", "Rombel Tujuan", "text"),
+    ],
+    "Approval Perubahan Jabatan PTK": COMMON_HEADER + [
+        F("nama_ptk", "Nama PTK Sesuai SK", "text"),
+        F("nip", "NIP", "text"),
+        F("nik", "NIK", "text"),
+        F("no_sk", "No SK Pengangkatan", "text"),
+        F("tanggal_sk", "Tanggal Surat (SK)", "date"),
+        F("tmt_tugas", "TMT Tugas", "date"),
+        F("mata_pelajaran", "Mata Pelajaran", "text"),
+        F("upload_sk_ktp", "Upload SK dan KTP (jadi 1 PDF)", "text", required=False, help_text="Unggah file PDF pada bagian lampiran"),
+    ],
+    "Approval Input Siswa Baru": COMMON_HEADER + [
+        F("nama_siswa", "Nama Lengkap Siswa", "text"),
+        F("nisn", "NISN", "text"),
+        F("nik", "NIK", "text"),
+        F("rombel", "Rombel", "text"),
+        F("keterangan", "Keterangan", "select", options=["Siswa Baru", "Mutasi"]),
+    ],
+    "Approval Penugasan Kepala Sekolah": COMMON_HEADER + [
+        F("nama_kepsek", "Nama Kepala Sekolah / PLT Sesuai SK", "text"),
+        F("nip", "NIP", "text"),
+        F("nik", "NIK", "text"),
+        F("no_sk", "No SK Pengangkatan", "text"),
+        F("tanggal_sk", "Tanggal Surat (SK)", "date"),
+        F("tmt_tugas", "TMT Tugas", "date"),
+        F("diangkat_sebagai", "Diangkat Sebagai", "select", options=["Kepala Sekolah", "PLT Kepala Sekolah"]),
+        F("mapel", "Mapel", "text"),
+        F("upload_sk_ktp", "Upload SK dan KTP (jadi 1 PDF)", "text", required=False, help_text="Unggah file PDF pada bagian lampiran"),
+    ],
+    "Approval Pengajuan Mutasi Guru": COMMON_HEADER + [
+        F("nama_gtk", "Nama GTK Sesuai SK", "text"),
+        F("nip", "NIP", "text"),
+        F("nik", "NIK", "text"),
+        F("nuptk", "NUPTK", "text"),
+        F("no_sk", "No SK Pengangkatan", "text"),
+        F("tanggal_sk", "Tanggal Surat (SK)", "date"),
+        F("tmt_tugas", "TMT Tugas", "date"),
+        F("diangkat_sebagai", "Diangkat Sebagai", "select", options=["Guru", "Tenaga Kependidikan"]),
+        F("mapel", "Mapel", "text"),
+        F("unit_kerja_lama", "Unit Kerja Lama", "text"),
+        F("unit_kerja_baru", "Unit Kerja Baru", "text"),
+        F("upload_sk_ktp", "Upload SK dan KTP (jadi 1 PDF)", "text", required=False, help_text="Unggah file PDF pada bagian lampiran"),
+    ],
+    "Approval Input Jam Tambahan di Sekolah Lain": COMMON_HEADER + [
+        F("nama_gtk", "Nama GTK Sesuai SK", "text"),
+        F("nip", "NIP", "text"),
+        F("nik", "NIK", "text"),
+        F("no_sk", "No SK Pengangkatan", "text"),
+        F("tanggal_sk", "Tanggal Surat (SK)", "date"),
+        F("tmt_tugas", "TMT Tugas", "date"),
+        F("mapel", "Mapel", "text"),
+        F("unit_kerja_asal", "Unit Kerja Asal", "text"),
+        F("unit_kerja_tujuan", "Unit Kerja Tujuan", "text"),
+        F("upload_sk_ktp", "Upload SK dan KTP (jadi 1 PDF)", "text", required=False, help_text="Unggah file PDF pada bagian lampiran"),
+    ],
+    "Approval Input Kenaikan Gaji Berkala atau Kenaikan Pangkat": COMMON_HEADER + [
+        F("nama_gtk", "Nama GTK Sesuai SK", "text"),
+        F("nip", "NIP", "text"),
+        F("nik", "NIK", "text"),
+        F("no_sk_berkala", "No SK Berkala / KP", "text"),
+        F("tanggal_sk", "Tanggal Surat (SK)", "date"),
+        F("tmt", "TMT", "date"),
+        F("gaji_pokok", "Gaji Pokok Sesuai SK", "number"),
+        F("upload_sk_ktp", "Upload SK dan KTP (jadi 1 PDF)", "text", required=False, help_text="Unggah file PDF pada bagian lampiran"),
+    ],
+}
+
+
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -130,11 +255,22 @@ class OperatorUpdate(BaseModel):
     active: Optional[bool] = None
 
 
+class FormField(BaseModel):
+    key: str
+    label: str
+    type: Literal["text", "number", "date", "select", "textarea", "tel", "email"] = "text"
+    required: bool = True
+    options: List[str] = []
+    help_text: Optional[str] = None
+    placeholder: Optional[str] = None
+
+
 class LayananIn(BaseModel):
     nama: str
     sla_days: int = Field(ge=1, le=60)
     deskripsi: Optional[str] = None
     checklist: List[str] = []
+    form_schema: List[FormField] = []
 
 
 class AttachmentIn(BaseModel):
@@ -155,6 +291,7 @@ class TicketCreate(BaseModel):
     prioritas: Literal["Rendah", "Normal", "Tinggi", "Mendesak"] = "Normal"
     attachments: List[AttachmentIn] = []
     checklist_state: List[ChecklistItem] = []
+    form_data: dict = {}
 
 
 class AssignIn(BaseModel):
@@ -195,6 +332,15 @@ class BulkStatusIn(BaseModel):
     ticket_ids: List[str] = Field(min_length=1, max_length=500)
     status: Literal["Draft", "Diajukan", "Diproses", "Menunggu Dokumen", "Revisi", "Disetujui", "Selesai", "Ditolak"]
     catatan: Optional[str] = None
+
+
+class BulkDeleteIn(BaseModel):
+    ticket_ids: List[str] = Field(min_length=1, max_length=500)
+
+
+class BulkPriorityIn(BaseModel):
+    ticket_ids: List[str] = Field(min_length=1, max_length=500)
+    prioritas: Literal["Rendah", "Normal", "Tinggi", "Mendesak"]
 
 
 # ---------- Helpers ----------
@@ -556,6 +702,7 @@ async def create_ticket(payload: TicketCreate, user: dict = Depends(get_current_
         "assignee_id": None,
         "assignee_name": None,
         "checklist": checklist_items,
+        "form_data": payload.form_data or {},
     }
     res = await db.tickets.insert_one(doc)
     tid = str(res.inserted_id)
@@ -848,6 +995,63 @@ async def bulk_status(payload: BulkStatusIn, user: dict = Depends(require_role("
         user, "ticket", None, "bulk_status",
         f"Bulk status change {updated} tiket → {payload.status}",
         {"count": updated, "status": payload.status, "catatan": payload.catatan, "ticket_ids": payload.ticket_ids[:50]},
+    )
+    return {"ok": True, "updated": updated}
+
+
+@api.post("/tickets/bulk-delete")
+async def bulk_delete(payload: BulkDeleteIn, user: dict = Depends(require_role("koordinator"))):
+    deleted = 0
+    ticket_numbers = []
+    for tid in payload.ticket_ids:
+        try:
+            oid = ObjectId(tid)
+        except Exception:
+            continue
+        t = await db.tickets.find_one({"_id": oid})
+        if not t:
+            continue
+        ticket_numbers.append(t.get("ticket_number"))
+        # cascade-delete related data
+        await db.tickets.delete_one({"_id": oid})
+        await db.activities.delete_many({"ticket_id": tid})
+        await db.attachments.delete_many({"ticket_id": tid})
+        await db.notifications.delete_many({"ticket_id": tid})
+        deleted += 1
+
+    await log_audit(
+        user, "ticket", None, "bulk_delete",
+        f"Bulk delete {deleted} tiket: {', '.join(ticket_numbers[:5])}{'...' if len(ticket_numbers) > 5 else ''}",
+        {"count": deleted, "ticket_numbers": ticket_numbers[:50]},
+    )
+    return {"ok": True, "deleted": deleted}
+
+
+@api.post("/tickets/bulk-priority")
+async def bulk_priority(payload: BulkPriorityIn, user: dict = Depends(require_role("koordinator"))):
+    updated = 0
+    for tid in payload.ticket_ids:
+        try:
+            oid = ObjectId(tid)
+        except Exception:
+            continue
+        t = await db.tickets.find_one({"_id": oid})
+        if not t:
+            continue
+        old = t.get("prioritas")
+        if old == payload.prioritas:
+            continue
+        await db.tickets.update_one(
+            {"_id": oid},
+            {"$set": {"prioritas": payload.prioritas, "updated_at": iso(now_utc())}},
+        )
+        await log_activity(tid, user, "priority_change", f"Prioritas diubah: {old} → {payload.prioritas}", {"from": old, "to": payload.prioritas, "bulk": True})
+        updated += 1
+
+    await log_audit(
+        user, "ticket", None, "bulk_priority",
+        f"Bulk priority {updated} tiket → {payload.prioritas}",
+        {"count": updated, "prioritas": payload.prioritas, "ticket_ids": payload.ticket_ids[:50]},
     )
     return {"ok": True, "updated": updated}
 
@@ -1320,13 +1524,21 @@ async def seed():
     # services
     for nama, sla, checklist in DEFAULT_SERVICES:
         existing = await db.services.find_one({"nama": nama})
+        form_schema = DEFAULT_FORM_SCHEMAS.get(nama, [])
         if not existing:
             await db.services.insert_one({
                 "nama": nama, "sla_days": sla, "deskripsi": None,
-                "checklist": checklist, "created_at": iso(now_utc()),
+                "checklist": checklist, "form_schema": form_schema,
+                "created_at": iso(now_utc()),
             })
-        elif "checklist" not in existing:
-            await db.services.update_one({"_id": existing["_id"]}, {"$set": {"checklist": checklist}})
+        else:
+            updates: dict = {}
+            if "checklist" not in existing:
+                updates["checklist"] = checklist
+            if not existing.get("form_schema"):
+                updates["form_schema"] = form_schema
+            if updates:
+                await db.services.update_one({"_id": existing["_id"]}, {"$set": updates})
 
     # admin koordinator
     admin_email = os.environ["ADMIN_EMAIL"].lower()

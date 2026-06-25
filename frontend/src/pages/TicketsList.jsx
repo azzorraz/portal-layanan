@@ -15,7 +15,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { StatusBadge, SlaBadge, PriorityBadge } from "@/components/Badges";
 import { STATUS_LIST, fmtDate } from "@/lib/format";
-import { Filter, Loader2, Plus, Search, UserCheck, Workflow, X } from "lucide-react";
+import { Filter, Loader2, Plus, Search, Trash2, UserCheck, Workflow, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 30;
@@ -354,6 +354,8 @@ function BulkActionBar({ count, ticketIds, onClear, onDone }) {
       <div className="flex items-center gap-2">
         <BulkAssignDialog ticketIds={ticketIds} onDone={onDone} />
         <BulkStatusDialog ticketIds={ticketIds} onDone={onDone} />
+        <BulkPriorityDialog ticketIds={ticketIds} onDone={onDone} />
+        <BulkDeleteDialog ticketIds={ticketIds} onDone={onDone} />
       </div>
     </div>
   );
@@ -414,6 +416,117 @@ function BulkAssignDialog({ ticketIds, onDone }) {
           <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
           <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-bulk-assign">
             {busy ? "Memproses..." : `Tugaskan ${ticketIds.length} Tiket`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BulkPriorityDialog({ ticketIds, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [prioritas, setPrioritas] = useState("Tinggi");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post("/tickets/bulk-priority", {
+        ticket_ids: ticketIds,
+        prioritas,
+      });
+      toast.success(`${data.updated} tiket diperbarui`);
+      setOpen(false);
+      onDone();
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="bg-white" data-testid="bulk-priority-button">
+          <Zap className="h-3.5 w-3.5 mr-1.5" /> Prioritas
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ubah Prioritas {ticketIds.length} Tiket</DialogTitle>
+          <DialogDescription>Prioritas baru diterapkan ke seluruh tiket terpilih dan tercatat di timeline + audit log.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">Prioritas Baru</Label>
+            <Select value={prioritas} onValueChange={setPrioritas}>
+              <SelectTrigger className="h-10 mt-1" data-testid="bulk-priority-select"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {["Rendah", "Normal", "Tinggi", "Mendesak"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
+          <Button onClick={submit} disabled={busy} className="bg-zinc-950 hover:bg-zinc-800" data-testid="confirm-bulk-priority">
+            {busy ? "Memproses..." : `Terapkan ke ${ticketIds.length} Tiket`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BulkDeleteDialog({ ticketIds, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const needText = `HAPUS ${ticketIds.length}`;
+
+  const submit = async () => {
+    if (confirmText !== needText) { toast.error(`Ketik "${needText}" untuk konfirmasi`); return; }
+    setBusy(true);
+    try {
+      const { data } = await api.post("/tickets/bulk-delete", { ticket_ids: ticketIds });
+      toast.success(`${data.deleted} tiket dihapus`);
+      setOpen(false); setConfirmText("");
+      onDone();
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setConfirmText(""); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="bg-white text-red-700 border-red-200 hover:bg-red-50 hover:text-red-800" data-testid="bulk-delete-button">
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Hapus
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="text-red-700">Hapus {ticketIds.length} Tiket?</DialogTitle>
+          <DialogDescription>
+            Aksi ini <strong>tidak dapat dibatalkan</strong>. Seluruh data tiket, lampiran, aktivitas, dan notifikasi terkait akan ikut terhapus permanen. Operasi tercatat di audit log.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">
+              Ketik <span className="font-mono text-red-700">{needText}</span> untuk konfirmasi
+            </Label>
+            <Input
+              value={confirmText} onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={needText} className="h-10 mt-1 font-mono"
+              data-testid="bulk-delete-confirm-input"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
+          <Button onClick={submit} disabled={busy || confirmText !== needText}
+            className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+            data-testid="confirm-bulk-delete"
+          >
+            {busy ? "Menghapus..." : `Hapus ${ticketIds.length} Tiket`}
           </Button>
         </DialogFooter>
       </DialogContent>

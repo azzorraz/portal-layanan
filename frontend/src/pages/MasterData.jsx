@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Trash2, Pencil, Plus } from "lucide-react";
+import { Trash2, Pencil, Plus, GripVertical, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 
 function SectionHeader({ title, action }) {
@@ -71,13 +71,37 @@ function KecamatanTab() {
 function LayananTab() {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ nama: "", sla_days: 3, deskripsi: "", checklist: [] });
+  const [form, setForm] = useState({ nama: "", sla_days: 3, deskripsi: "", checklist: [], form_schema: [] });
   const [open, setOpen] = useState(false);
   const [newChecklist, setNewChecklist] = useState("");
+  const [schemaOpen, setSchemaOpen] = useState(false);
+  const [newField, setNewField] = useState({ key: "", label: "", type: "text", required: true, options: "", help_text: "" });
   const load = async () => { try { const { data } = await api.get("/layanan"); setItems(data); } catch (e) { toast.error(apiError(e)); } };
   useEffect(() => { load(); }, []);
-  const openNew = () => { setEditing(null); setForm({ nama: "", sla_days: 3, deskripsi: "", checklist: [] }); setOpen(true); };
-  const openEdit = (l) => { setEditing(l); setForm({ nama: l.nama, sla_days: l.sla_days, deskripsi: l.deskripsi || "", checklist: l.checklist || [] }); setOpen(true); };
+  const openNew = () => { setEditing(null); setForm({ nama: "", sla_days: 3, deskripsi: "", checklist: [], form_schema: [] }); setOpen(true); };
+  const openEdit = (l) => { setEditing(l); setForm({ nama: l.nama, sla_days: l.sla_days, deskripsi: l.deskripsi || "", checklist: l.checklist || [], form_schema: l.form_schema || [] }); setOpen(true); };
+
+  const addField = () => {
+    if (!newField.key.trim() || !newField.label.trim()) { toast.error("Key & label wajib diisi"); return; }
+    const field = {
+      key: newField.key.trim().replace(/\s+/g, "_"),
+      label: newField.label.trim(),
+      type: newField.type,
+      required: newField.required,
+      options: newField.type === "select" ? newField.options.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      help_text: newField.help_text || null,
+    };
+    setForm({ ...form, form_schema: [...form.form_schema, field] });
+    setNewField({ key: "", label: "", type: "text", required: true, options: "", help_text: "" });
+  };
+  const removeField = (idx) => setForm({ ...form, form_schema: form.form_schema.filter((_, i) => i !== idx) });
+  const moveField = (idx, dir) => {
+    const arr = [...form.form_schema];
+    const swap = idx + dir;
+    if (swap < 0 || swap >= arr.length) return;
+    [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
+    setForm({ ...form, form_schema: arr });
+  };
   const save = async () => {
     try {
       if (editing) await api.put(`/layanan/${editing.id}`, form);
@@ -96,6 +120,7 @@ function LayananTab() {
           <thead><tr className="bg-zinc-50 border-b border-zinc-200">
             <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Nama Layanan</th>
             <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">SLA (hari)</th>
+            <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Form</th>
             <th className="px-4 py-3 w-24"></th>
           </tr></thead>
           <tbody>
@@ -103,13 +128,14 @@ function LayananTab() {
               <tr key={l.id} className="border-b border-zinc-100" data-testid={`layanan-row-${l.id}`}>
                 <td className="px-4 py-3 text-zinc-900">{l.nama}</td>
                 <td className="px-4 py-3 font-mono">{l.sla_days}</td>
+                <td className="px-4 py-3 font-mono text-xs text-zinc-600">{(l.form_schema || []).length} fields</td>
                 <td className="px-4 py-3 text-right space-x-2">
                   <button onClick={() => openEdit(l)} className="text-zinc-500 hover:text-zinc-900" data-testid={`edit-layanan-${l.id}`}><Pencil className="h-4 w-4 inline" /></button>
                   <button onClick={() => del(l.id)} className="text-zinc-400 hover:text-red-600"><Trash2 className="h-4 w-4 inline" /></button>
                 </td>
               </tr>
             ))}
-            {items.length === 0 && <tr><td colSpan={3} className="px-4 py-10 text-center text-zinc-500">Belum ada data</td></tr>}
+            {items.length === 0 && <tr><td colSpan={4} className="px-4 py-10 text-center text-zinc-500">Belum ada data</td></tr>}
           </tbody>
         </table>
       </Card>
@@ -161,6 +187,58 @@ function LayananTab() {
                   }}><Plus className="h-3.5 w-3.5" /></Button>
                 </div>
               </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs uppercase tracking-wider text-zinc-500">Form Fields ({form.form_schema.length})</Label>
+                <Button type="button" size="sm" variant="outline" onClick={() => setSchemaOpen((o) => !o)} data-testid="toggle-schema-editor">
+                  <Settings2 className="h-3.5 w-3.5 mr-1.5" /> {schemaOpen ? "Sembunyikan" : "Kelola Form"}
+                </Button>
+              </div>
+              {schemaOpen && (
+                <div className="mt-2 space-y-2 border border-zinc-200 rounded-md p-3 bg-zinc-50/50" data-testid="schema-editor">
+                  {form.form_schema.length === 0 && (
+                    <div className="text-xs text-zinc-500 italic">Belum ada field. Tambahkan di bawah.</div>
+                  )}
+                  {form.form_schema.map((f, i) => (
+                    <div key={i} className="flex items-start gap-2 px-2 py-2 bg-white rounded-md border border-zinc-200" data-testid={`schema-field-${i}`}>
+                      <div className="flex flex-col">
+                        <button type="button" onClick={() => moveField(i, -1)} disabled={i === 0} className="text-zinc-300 hover:text-zinc-700 disabled:opacity-30">▲</button>
+                        <button type="button" onClick={() => moveField(i, 1)} disabled={i === form.form_schema.length - 1} className="text-zinc-300 hover:text-zinc-700 disabled:opacity-30">▼</button>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-zinc-900 truncate">{f.label} {f.required && <span className="text-red-500">*</span>}</div>
+                        <div className="text-[11px] text-zinc-500 font-mono">key: {f.key} • type: {f.type}{f.options?.length ? ` • [${f.options.join(", ")}]` : ""}</div>
+                      </div>
+                      <button type="button" onClick={() => removeField(i)} className="text-zinc-400 hover:text-red-600">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="border-t border-zinc-200 pt-2 mt-2 grid grid-cols-1 md:grid-cols-2 gap-2" data-testid="add-field-form">
+                    <Input value={newField.key} onChange={(e) => setNewField({ ...newField, key: e.target.value })} placeholder="key (snake_case)" className="h-9" data-testid="new-field-key" />
+                    <Input value={newField.label} onChange={(e) => setNewField({ ...newField, label: e.target.value })} placeholder="Label" className="h-9" data-testid="new-field-label" />
+                    <Select value={newField.type} onValueChange={(v) => setNewField({ ...newField, type: v })}>
+                      <SelectTrigger className="h-9" data-testid="new-field-type"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["text", "number", "date", "select", "textarea", "tel", "email"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <label className="flex items-center gap-2 px-3 h-9 text-sm bg-white border border-zinc-200 rounded-md">
+                      <input type="checkbox" checked={newField.required} onChange={(e) => setNewField({ ...newField, required: e.target.checked })} className="h-4 w-4" />
+                      Wajib (required)
+                    </label>
+                    {newField.type === "select" && (
+                      <Input value={newField.options} onChange={(e) => setNewField({ ...newField, options: e.target.value })} placeholder="opsi1, opsi2, opsi3" className="h-9 md:col-span-2" data-testid="new-field-options" />
+                    )}
+                    <Input value={newField.help_text} onChange={(e) => setNewField({ ...newField, help_text: e.target.value })} placeholder="Petunjuk (opsional)" className="h-9 md:col-span-2" />
+                    <Button type="button" onClick={addField} className="md:col-span-2 bg-zinc-950 hover:bg-zinc-800" data-testid="add-field-button">
+                      <Plus className="h-3.5 w-3.5 mr-1.5" /> Tambah Field
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

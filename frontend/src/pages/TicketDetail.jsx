@@ -28,6 +28,7 @@ function activityIcon(kind) {
   if (kind === "attachment") return Paperclip;
   if (kind === "assign") return UserCheck;
   if (kind === "checklist") return ListChecks;
+  if (kind === "priority_change") return ActivityIcon;
   return ActivityIcon;
 }
 
@@ -140,6 +141,10 @@ export default function TicketDetail() {
 
           {ticket.checklist?.length > 0 && (
             <ChecklistSection ticket={ticket} onChanged={load} canEdit={user?.role === "operator" && ticket.operator_id === user.id || user?.role === "koordinator"} />
+          )}
+
+          {ticket.form_data && Object.keys(ticket.form_data).length > 0 && (
+            <FormDataDisplay ticket={ticket} />
           )}
 
           <Card className="border-zinc-200 shadow-none p-6">
@@ -273,6 +278,42 @@ export default function TicketDetail() {
         </div>
       </div>
     </div>
+  );
+}
+
+function FormDataDisplay({ ticket }) {
+  const [schema, setSchema] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/layanan");
+        const lay = data.find((l) => l.id === ticket.layanan_id);
+        if (alive && lay?.form_schema) setSchema(lay.form_schema);
+      } catch { /* noop */ }
+    })();
+    return () => { alive = false; };
+  }, [ticket.layanan_id]);
+
+  const labelFor = (key) => schema.find((f) => f.key === key)?.label || key.replace(/_/g, " ");
+  const entries = Object.entries(ticket.form_data || {});
+  // sort by schema order if available
+  const ordered = schema.length
+    ? schema.map((f) => [f.key, ticket.form_data[f.key]]).filter(([, v]) => v !== undefined && v !== "")
+    : entries;
+
+  return (
+    <Card className="border-zinc-200 shadow-none p-6" data-testid="ticket-form-data">
+      <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-zinc-500 mb-4">Data Formulir</div>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+        {ordered.map(([k, v]) => (
+          <div key={k}>
+            <dt className="text-xs text-zinc-500">{labelFor(k)}</dt>
+            <dd className="text-zinc-900 mt-0.5 break-words">{String(v) || <span className="text-zinc-400">—</span>}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, apiError } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import DynamicForm from "@/components/DynamicForm";
 import { toast } from "sonner";
 import { Paperclip, Upload, X } from "lucide-react";
 
@@ -49,6 +50,14 @@ export default function CreateTicket() {
 
   const selectedLayanan = layananOpts.find((l) => l.id === layananId);
   const [checklistState, setChecklistState] = useState([]);
+  const [formData, setFormData] = useState({});
+
+  const prefill = useMemo(() => ({
+    nama_sekolah: user?.sekolah?.nama || "",
+    nama_operator: user?.name || "",
+    npsn: user?.sekolah?.npsn || "",
+    npsn_npyp: user?.sekolah?.npsn || "",
+  }), [user]);
 
   useEffect(() => {
     if (selectedLayanan?.checklist?.length) {
@@ -56,7 +65,16 @@ export default function CreateTicket() {
     } else {
       setChecklistState([]);
     }
-  }, [layananId, selectedLayanan]);
+    // seed form_data with prefill keys present in schema
+    const schema = selectedLayanan?.form_schema || [];
+    const seeded = {};
+    for (const f of schema) {
+      if (prefill[f.key] !== undefined && prefill[f.key] !== "") {
+        seeded[f.key] = prefill[f.key];
+      }
+    }
+    setFormData(seeded);
+  }, [layananId, selectedLayanan, prefill]);
 
   const toggleChecklist = (i) => {
     setChecklistState((prev) => prev.map((c, idx) => (idx === i ? { ...c, checked: !c.checked } : c)));
@@ -75,6 +93,14 @@ export default function CreateTicket() {
   const submit = async (e) => {
     e.preventDefault();
     if (!layananId) { toast.error("Pilih jenis layanan"); return; }
+    // validate required form fields from schema
+    const schema = selectedLayanan?.form_schema || [];
+    for (const f of schema) {
+      if (f.required && !String(formData[f.key] || "").trim()) {
+        toast.error(`Field wajib: ${f.label}`);
+        return;
+      }
+    }
     setBusy(true);
     try {
       const attachments = [];
@@ -85,6 +111,7 @@ export default function CreateTicket() {
       const { data } = await api.post("/tickets", {
         layanan_id: layananId, judul, deskripsi, prioritas, attachments,
         checklist_state: checklistState,
+        form_data: formData,
       });
       toast.success(`Pengajuan dibuat: ${data.ticket_number}`);
       nav(`/tickets/${data.id}`);
@@ -142,6 +169,19 @@ export default function CreateTicket() {
               <div className="text-[11px] text-zinc-500 mt-3">
                 {checklistState.filter((c) => c.checked).length} / {checklistState.length} item dicentang
               </div>
+            </div>
+          )}
+
+          {selectedLayanan?.form_schema?.length > 0 && (
+            <div className="rounded-md border border-zinc-200 bg-white p-5">
+              <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold mb-1">Formulir Layanan</div>
+              <p className="text-xs text-zinc-500 mb-4">Lengkapi data spesifik untuk jenis layanan ini. Field bertanda <span className="text-red-500">*</span> wajib diisi.</p>
+              <DynamicForm
+                schema={selectedLayanan.form_schema}
+                values={formData}
+                onChange={setFormData}
+                prefill={prefill}
+              />
             </div>
           )}
 

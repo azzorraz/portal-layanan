@@ -1,0 +1,44 @@
+{
+  "summary": "Phase 4 (bulk-delete + bulk-priority + dynamic form schema) tested end-to-end. Backend: 15/15 pytest passing in /app/backend/tests/test_phase4.py — TestBulkDelete (5 tests: empty→422, operator→403, success+cascade with GET-404 on all deleted ids, audit_log entry 'bulk_delete', nonexistent ids returns deleted=0); TestBulkPriority (5 tests: empty→422, invalid prioritas→422, operator→403, success with updated count + activity meta.bulk=true + audit 'bulk_priority', already-target skip returns updated=0); TestLayananFormSchema (3 tests: all layanan have form_schema key, 'Approval Pengajuan Mutasi Guru' has all 15 expected keys with diangkat_sebagai=select[Guru,Tenaga Kependidikan], FormField shape valid); TestLayananCRUDSchema (1 test: create + update layanan persists form_schema add/modify); TestTicketFormData (1 test: POST /tickets with form_data persists and GET returns it). Frontend (Playwright on production URL): (1) KOORD /tickets BulkActionBar shows all 4 buttons (bulk-assign-button, bulk-status-button, bulk-priority-button, bulk-delete-button); (2) Bulk Priority dialog → select 'Tinggi' → confirm-bulk-priority → API returns ok, all 3 tickets have prioritas='Tinggi' verified via GET; (3) Bulk Delete dialog → confirm-bulk-delete disabled initially & when typing 'WRONG', enabled after exact 'HAPUS 3' → POST succeeds, all 3 tickets return 404 on subsequent GET (cascade confirmed); (4) AuditLog page renders 'Bulk Priority' and 'Bulk Delete' action labels; (5) OPERATOR has NO select-all-checkbox/bulk-action-bar on /tickets (role guard verified); (6) CreateTicket DynamicForm: selecting 'Approval Pengajuan Mutasi Guru' renders dynamic-form with form-field-* inputs; nama_sekolah='SDN 01 Bogor Tengah' and nama_operator='Budi Santoso' both prefilled AND readOnly; tanggal_sk type='date', no_whatsapp type='tel'; submit with empty required fields blocked (HTML5 native), submit with all fields filled navigates to /tickets/{id}; (7) TicketDetail shows ticket-form-data section with human-readable labels ('Nama GTK' not 'nama_gtk') and values ('Pak Ujang' visible); (8) MasterData Layanan Edit dialog shows 'Form' column on list (13 fields, 11 fields, etc per layanan); Edit → toggle-schema-editor opens schema-editor displaying all 13 schema-field-N rows with up/down arrows + delete; add-field-form has new-field-key, new-field-label, new-field-type, add-field-button all visible.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "CreateTicket DynamicForm", "issues": ["Empty-required submit relies on browser HTML5 native validation (input required attribute) — the spec-mentioned 'Field wajib: {label}' toast does NOT fire because native validation blocks the submit handler first. Both behaviours block submission but UX is inconsistent with spec wording. Consider either: (a) add noValidate on form + manual toast, OR (b) document HTML5 native validation as the intended behaviour."]},
+      {"screen": "MasterData schema-editor", "issues": ["With 13 existing fields, the add-field-form (new-field-type Select) sits below fold inside the Dialog; clicking the type select triggers an 'outside viewport' issue on automated scroll. Real users can scroll the dialog body — purely a Playwright timing/scroll edge case, no functional bug."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase4.py",
+    "/app/test_reports/pytest/phase4_results.xml"
+  ],
+  "action_items": [
+    "(Optional UX nit) In CreateTicket, consider adding noValidate to <form> + a manual required-field toast 'Field wajib: {label}' to match spec wording. Current HTML5 native blocking is functional but silent.",
+    "(Carry-over from prior iterations) server.py is ~1615 lines — consider splitting into routers/modules (auth, tickets, layanan, kb, audit, executive).",
+    "(Hygiene) Several TEST_* tickets remain in DB from cumulative test runs. Consider an admin cleanup endpoint or DB script to purge TEST_-prefixed records."
+  ],
+  "critical_code_review_comments": [
+    "BulkDeleteIn / BulkPriorityIn correctly use Field(min_length=1) → empty array returns 422. Verified.",
+    "bulk-delete cascades to db.activities, db.attachments, db.notifications using ticket_id string match — confirmed cascade via GET 404 on deleted ids.",
+    "bulk-priority skips already-target tickets (old == payload.prioritas) so updated=0 when no-op — verified.",
+    "Both endpoints emit single audit_log entry (action='bulk_delete' / 'bulk_priority') with bounded meta (ticket_numbers[:50] / ticket_ids[:50]). Good.",
+    "Per-ticket activity log 'priority_change' carries meta.bulk=true on bulk-priority — verified via GET activities.",
+    "DEFAULT_FORM_SCHEMAS seeded for 11 default layanan; existing layanan without form_schema get backfilled on startup (line 1538-1539 updates only if !existing.form_schema). Idempotent on restart. Good.",
+    "FormField pydantic Literal['text','number','date','select','textarea','tel','email'] enforces enum — invalid types would 422. Good.",
+    "DynamicForm.jsx: prefill values render readOnly+disabled with bg-zinc-50 styling — visually distinct from editable, accessible.",
+    "FormDataDisplay component fetches layanan to label-map form_data entries — labels rendered, not raw keys. Verified 'Nama GTK' shown instead of 'nama_gtk'.",
+    "BulkDeleteDialog requires exact text match 'HAPUS {N}' — destructive operation guard. Verified disabled state until exact match.",
+    "Role guard verified: operator gets 403 on bulk-delete/bulk-priority/bulk-assign/bulk-status AND UI completely hides bulk controls (select-all-checkbox + row-checkboxes + bulk-action-bar)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase4.py (new file, 15 tests covering Phase 4)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of Phase 4 review_request bullets verified"},
+  "test_credentials": "koordinator@dapodik.id/koordinator123 + operator1@dapodik.id/operator123 — all working",
+  "seed_data_creation": "Tests created several TEST_P4_* and TEST_UI* tickets via operator1; bulk-delete tests cleaned up most of them. One ticket TEST_UI_DYN_FORM (TCK-2026-000053) remains for inspection. Total DB now ~26 tickets.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 4 fully functional. Confirmed selectors: bulk-priority-button, bulk-priority-select, confirm-bulk-priority, bulk-delete-button, bulk-delete-confirm-input (text 'HAPUS {N}' exact match required), confirm-bulk-delete, dynamic-form, form-field-{key}, ticket-form-data, toggle-schema-editor, schema-editor, schema-field-{i}, add-field-form, new-field-key, new-field-label, new-field-type, new-field-options (only when type=select), add-field-button. Frontend localStorage token key is 'dpdk_token' (NOT 'token'). Auth uses both Bearer token in localStorage AND httpOnly cookies — calling /api/auth/login with a different user via page.evaluate fetch WILL override the cookie session and switch the UI user. To isolate users in Playwright: clear_cookies() + localStorage.clear() between logins. AuditLog action labels: 'Bulk Priority', 'Bulk Delete' (in addition to prior 'Bulk Assign', 'Bulk Status'). DEFAULT_FORM_SCHEMAS dict in server.py line 95 contains seeded schemas for all 11 default layanan.",
+  "rca of the issue": "N/A — no functional bugs identified. Minor UX inconsistency only: spec asks for 'Field wajib' toast on empty required submit, actual implementation relies on HTML5 native required attribute. Both block submission; spec wording mismatch only."
+}
