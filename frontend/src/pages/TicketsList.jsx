@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -396,9 +396,9 @@ function BulkAssignDialog({ ticketIds, onDone }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Tugaskan {ticketIds.length} Tiket</DialogTitle>
+          <DialogDescription>Pilih petugas untuk menangani seluruh tiket yang dipilih.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-xs text-zinc-500">Pilih petugas untuk menangani seluruh tiket yang dipilih.</p>
           <div>
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Petugas</Label>
             <Select value={assigneeId} onValueChange={setAssigneeId}>
@@ -453,9 +453,9 @@ function BulkStatusDialog({ ticketIds, onDone }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Ubah Status {ticketIds.length} Tiket</DialogTitle>
+          <DialogDescription>Perubahan diterapkan ke seluruh tiket terpilih dan tercatat di timeline + audit log.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-xs text-zinc-500">Perubahan akan diterapkan ke seluruh tiket terpilih dan tercatat di timeline + audit log.</p>
           <div>
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Status Baru</Label>
             <Select value={status} onValueChange={setStatus}>
