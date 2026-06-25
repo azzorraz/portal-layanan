@@ -220,9 +220,11 @@ function WhatsAppStats({ data, onRefresh }) {
       const { data: res } = await api.post(`/admin/wa-logs/${logId}/resend`);
       if (res.status) toast.success("Pesan terkirim ulang");
       else toast.error(res.detail || "Gagal mengirim ulang");
-      onRefresh?.();
     } catch (e) { toast.error(apiError(e)); }
-    finally { setResending(null); }
+    finally {
+      setResending(null);
+      onRefresh?.();
+    }
   };
 
   return (
