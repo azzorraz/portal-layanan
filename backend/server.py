@@ -30,10 +30,12 @@ from auth import (
 from fonnte import (
     send_whatsapp,
     send_whatsapp_many,
+    fetch_device_info,
     msg_ticket_created,
     msg_status_change,
     msg_new_comment,
     msg_bulk_status,
+    normalize_phone,
 )
 
 # ---------- Setup ----------
@@ -403,6 +405,51 @@ async def log_audit(actor: dict, entity: str, entity_id: Optional[str], action: 
     })
 
 
+async def notify_operator_wa(
+    ticket: dict,
+    event_type: str,
+    message: str,
+) -> dict:
+    """Send a WhatsApp message to the ticket's operator (form_data.no_whatsapp),
+    honoring the operator's opt-out preference, and log the result to db.wa_logs.
+
+    Returns the Fonnte response dict (or skip-dict)."""
+    phone = (ticket.get("form_data") or {}).get("no_whatsapp")
+    operator_id = ticket.get("operator_id")
+    log_doc: dict = {
+        "ticket_id": str(ticket.get("_id")) if ticket.get("_id") else ticket.get("id"),
+        "ticket_number": ticket.get("ticket_number"),
+        "operator_id": operator_id,
+        "event_type": event_type,
+        "phone_last4": (normalize_phone(phone) or "")[-4:] if phone else "",
+        "created_at": iso(now_utc()),
+    }
+    # operator opt-out check
+    if operator_id:
+        try:
+            op = await db.users.find_one({"_id": ObjectId(operator_id)})
+            if op and op.get("wa_opt_out"):
+                log_doc.update({"status": False, "detail": "operator_opted_out", "skipped": True})
+                await db.wa_logs.insert_one(log_doc)
+                return {"status": False, "detail": "operator_opted_out", "skipped": True}
+        except Exception:
+            pass
+    if not phone:
+        log_doc.update({"status": False, "detail": "no_phone", "skipped": True})
+        await db.wa_logs.insert_one(log_doc)
+        return {"status": False, "detail": "no_phone", "skipped": True}
+    res = await send_whatsapp(phone, message)
+    log_doc.update({
+        "status": bool(res.get("status")),
+        "detail": str(res.get("detail") or "")[:300],
+        "fonnte_requestid": res.get("requestid"),
+        "quota_remaining": res.get("quota_remaining"),
+        "skipped": bool(res.get("skipped")),
+    })
+    await db.wa_logs.insert_one(log_doc)
+    return res
+
+
 async def compute_due_at(layanan_id: str, submitted_at: datetime) -> Optional[str]:
     try:
         lay = await db.services.find_one({"_id": ObjectId(layanan_id)})
@@ -734,13 +781,11 @@ async def create_ticket(payload: TicketCreate, user: dict = Depends(get_current_
     saved = await db.tickets.find_one({"_id": res.inserted_id})
     enriched = await _enrich_one(saved)
 
-    # WhatsApp confirmation to operator
-    phone = (saved.get("form_data") or {}).get("no_whatsapp")
-    if phone:
-        try:
-            await send_whatsapp(phone, msg_ticket_created(saved))
-        except Exception as e:
-            logger.warning("WA notify (created) failed: %s", e)
+    # WhatsApp confirmation to operator (skips silently if opted out or no phone)
+    try:
+        await notify_operator_wa(saved, "created", msg_ticket_created(saved))
+    except Exception as e:
+        logger.warning("WA notify (created) failed: %s", e)
 
     return enriched
 
@@ -831,12 +876,10 @@ async def change_status(tid: str, payload: StatusChange, user: dict = Depends(re
     saved = await db.tickets.find_one({"_id": ObjectId(tid)})
 
     # WhatsApp notify to operator
-    phone = (saved.get("form_data") or {}).get("no_whatsapp")
-    if phone:
-        try:
-            await send_whatsapp(phone, msg_status_change(saved, old, payload.status, payload.catatan))
-        except Exception as e:
-            logger.warning("WA notify (status) failed: %s", e)
+    try:
+        await notify_operator_wa(saved, "status_change", msg_status_change(saved, old, payload.status, payload.catatan))
+    except Exception as e:
+        logger.warning("WA notify (status) failed: %s", e)
 
     return await _enrich_one(saved)
 
@@ -856,12 +899,10 @@ async def add_comment(tid: str, payload: CommentIn, user: dict = Depends(get_cur
     else:
         await notify(t["operator_id"], tid, "Komentar baru dari koordinator", f"{t['ticket_number']}")
         # WhatsApp: koordinator → operator
-        phone = (t.get("form_data") or {}).get("no_whatsapp")
-        if phone:
-            try:
-                await send_whatsapp(phone, msg_new_comment(t, user.get("name") or "Koordinator", payload.content))
-            except Exception as e:
-                logger.warning("WA notify (comment) failed: %s", e)
+        try:
+            await notify_operator_wa(t, "comment", msg_new_comment(t, user.get("name") or "Koordinator", payload.content))
+        except Exception as e:
+            logger.warning("WA notify (comment) failed: %s", e)
     return {"ok": True}
 
 
@@ -1003,7 +1044,7 @@ async def bulk_assign(payload: BulkAssignIn, user: dict = Depends(require_role("
 @api.post("/tickets/bulk-status")
 async def bulk_status(payload: BulkStatusIn, user: dict = Depends(require_role("koordinator"))):
     updated = 0
-    wa_targets: list[tuple[str, dict]] = []  # (phone, ticket)
+    wa_pending: list[dict] = []
     for tid in payload.ticket_ids:
         try:
             oid = ObjectId(tid)
@@ -1024,24 +1065,24 @@ async def bulk_status(payload: BulkStatusIn, user: dict = Depends(require_role("
             msg += f" — {payload.catatan}"
         await log_activity(tid, user, "status_change", msg, {"from": old, "to": payload.status, "catatan": payload.catatan, "bulk": True})
         await notify(t["operator_id"], tid, "Status Pengajuan Diperbarui", f"{t['ticket_number']}: {payload.status}")
-        phone = (t.get("form_data") or {}).get("no_whatsapp")
-        if phone:
-            wa_targets.append((phone, t))
+        wa_pending.append({**t, "status": payload.status})
         updated += 1
 
-    # Send WhatsApp per ticket so message includes ticket-specific number
-    for phone, t in wa_targets:
+    wa_sent = 0
+    for t in wa_pending:
         try:
-            await send_whatsapp(phone, msg_bulk_status({**t, "status": payload.status}, payload.status))
+            res = await notify_operator_wa(t, "bulk_status", msg_bulk_status(t, payload.status))
+            if res.get("status"):
+                wa_sent += 1
         except Exception as e:
             logger.warning("WA bulk-status notify failed: %s", e)
 
     await log_audit(
         user, "ticket", None, "bulk_status",
         f"Bulk status change {updated} tiket → {payload.status}",
-        {"count": updated, "status": payload.status, "catatan": payload.catatan, "ticket_ids": payload.ticket_ids[:50], "wa_sent": len(wa_targets)},
+        {"count": updated, "status": payload.status, "catatan": payload.catatan, "ticket_ids": payload.ticket_ids[:50], "wa_sent": wa_sent},
     )
-    return {"ok": True, "updated": updated, "wa_sent": len(wa_targets)}
+    return {"ok": True, "updated": updated, "wa_sent": wa_sent}
 
 
 @api.post("/tickets/bulk-delete")
@@ -1348,13 +1389,132 @@ class WhatsAppTestIn(BaseModel):
     message: Optional[str] = None
 
 
+class WaPreferenceIn(BaseModel):
+    wa_opt_out: bool
+
+
+@api.patch("/auth/preferences")
+async def update_preferences(payload: WaPreferenceIn, user: dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"_id": ObjectId(user["id"])},
+        {"$set": {"wa_opt_out": payload.wa_opt_out, "updated_at": iso(now_utc())}},
+    )
+    return {"ok": True, "wa_opt_out": payload.wa_opt_out}
+
+
 @api.post("/admin/test-whatsapp")
 async def admin_test_wa(payload: WhatsAppTestIn, user: dict = Depends(require_role("koordinator"))):
     """Send a test WhatsApp message to verify Fonnte connectivity."""
     msg = payload.message or "Tes notifikasi Dapodik Ticketing. Jika Anda menerima ini, integrasi WhatsApp aktif."
     result = await send_whatsapp(payload.target, msg)
+    # Log to wa_logs so it appears in delivery stats
+    await db.wa_logs.insert_one({
+        "ticket_id": None,
+        "ticket_number": None,
+        "operator_id": None,
+        "event_type": "test",
+        "phone_last4": (normalize_phone(payload.target) or "")[-4:],
+        "status": bool(result.get("status")),
+        "detail": str(result.get("detail") or "")[:300],
+        "fonnte_requestid": result.get("requestid"),
+        "quota_remaining": result.get("quota_remaining"),
+        "skipped": bool(result.get("skipped")),
+        "created_at": iso(now_utc()),
+    })
     await log_audit(user, "system", None, "test_whatsapp", f"Test WA → {payload.target[-4:]}", {"result_status": result.get("status")})
     return result
+
+
+@api.get("/executive/whatsapp-stats")
+async def whatsapp_stats(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    _: dict = Depends(require_role("koordinator")),
+):
+    base: dict = {}
+    if from_date or to_date:
+        rng: dict = {}
+        if from_date:
+            rng["$gte"] = from_date
+        if to_date:
+            rng["$lte"] = to_date + "T23:59:59"
+        base["created_at"] = rng
+
+    total = await db.wa_logs.count_documents(base)
+    sent = await db.wa_logs.count_documents({**base, "status": True})
+    failed = await db.wa_logs.count_documents({**base, "status": False, "skipped": {"$ne": True}})
+    skipped = await db.wa_logs.count_documents({**base, "skipped": True})
+    success_rate = round((sent / total) * 100, 1) if total else 0.0
+
+    # last 24h / 7d / 30d
+    now = datetime.now(timezone.utc)
+    day1 = (now - timedelta(days=1)).isoformat()
+    day7 = (now - timedelta(days=7)).isoformat()
+    day30 = (now - timedelta(days=30)).isoformat()
+    sent_24h = await db.wa_logs.count_documents({"created_at": {"$gte": day1}, "status": True})
+    sent_7d = await db.wa_logs.count_documents({"created_at": {"$gte": day7}, "status": True})
+    sent_30d = await db.wa_logs.count_documents({"created_at": {"$gte": day30}, "status": True})
+
+    # by event type
+    pipeline = [
+        {"$match": base},
+        {"$group": {"_id": {"event": "$event_type", "ok": "$status"}, "count": {"$sum": 1}}},
+    ]
+    bucket: dict = {}
+    async for row in db.wa_logs.aggregate(pipeline):
+        ev = row["_id"]["event"] or "unknown"
+        ok = row["_id"]["ok"]
+        rec = bucket.setdefault(ev, {"event": ev, "sent": 0, "failed": 0})
+        if ok:
+            rec["sent"] += row["count"]
+        else:
+            rec["failed"] += row["count"]
+    by_event = sorted(bucket.values(), key=lambda r: r["sent"] + r["failed"], reverse=True)
+
+    # last 10 failures
+    failures = await db.wa_logs.find(
+        {"status": False, "skipped": {"$ne": True}},
+    ).sort("created_at", -1).limit(10).to_list(10)
+
+    # current quota — try device endpoint, else latest log
+    quota_remaining = None
+    device = await fetch_device_info()
+    try:
+        if isinstance(device, dict) and isinstance(device.get("quota"), int):
+            quota_remaining = device["quota"]
+    except Exception:
+        pass
+    if quota_remaining is None:
+        last_with_quota = await db.wa_logs.find(
+            {"quota_remaining": {"$ne": None}},
+        ).sort("created_at", -1).limit(1).to_list(1)
+        if last_with_quota:
+            quota_remaining = last_with_quota[0].get("quota_remaining")
+
+    # daily timeline (last 14 days)
+    timeline = []
+    for i in range(13, -1, -1):
+        start = (now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=i)).isoformat()
+        end = (now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=i - 1)).isoformat()
+        sc = await db.wa_logs.count_documents({"created_at": {"$gte": start, "$lt": end}, "status": True})
+        fc = await db.wa_logs.count_documents({"created_at": {"$gte": start, "$lt": end}, "status": False, "skipped": {"$ne": True}})
+        timeline.append({"date": start[:10], "sent": sc, "failed": fc})
+
+    return {
+        "total": total,
+        "sent": sent,
+        "failed": failed,
+        "skipped": skipped,
+        "success_rate": success_rate,
+        "sent_24h": sent_24h,
+        "sent_7d": sent_7d,
+        "sent_30d": sent_30d,
+        "by_event": by_event,
+        "recent_failures": [doc_to_public(f) for f in failures],
+        "quota_remaining": quota_remaining,
+        "device": device if device else None,
+        "timeline": timeline,
+    }
 
 
 @api.post("/admin/cleanup-test-tickets")
@@ -1607,6 +1767,9 @@ async def seed():
     await db.audit_logs.create_index([("entity", 1), ("created_at", -1)])
     await db.kb_articles.create_index([("updated_at", -1)])
     await db.kb_articles.create_index([("title", "text"), ("content", "text"), ("tags", "text")])
+    await db.wa_logs.create_index([("created_at", -1)])
+    await db.wa_logs.create_index([("status", 1), ("created_at", -1)])
+    await db.wa_logs.create_index([("event_type", 1), ("created_at", -1)])
 
     # kecamatan
     for k in DEFAULT_KECAMATAN:

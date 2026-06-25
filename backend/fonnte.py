@@ -38,7 +38,10 @@ async def send_whatsapp(
     delay: str = "1-2",
 ) -> dict:
     """Send a WhatsApp message via Fonnte. Returns Fonnte's response dict or
-    {"status": False, "detail": "..."} on error. Never raises."""
+    {"status": False, "detail": "..."} on error. Never raises.
+
+    Response is always a dict and additionally guaranteed to contain a
+    ``quota_remaining`` integer (when parseable from Fonnte response)."""
     if not _enabled():
         return {"status": False, "detail": "fonnte_disabled_or_no_token", "skipped": True}
 
@@ -65,12 +68,42 @@ async def send_whatsapp(
                 data = resp.json()
             except Exception:
                 data = {"status": False, "detail": resp.text[:200]}
+            # extract quota remaining (Fonnte returns nested {<device>: {remaining: int}})
+            quota = None
+            try:
+                q = data.get("quota") or {}
+                if isinstance(q, dict):
+                    for v in q.values():
+                        if isinstance(v, dict) and "remaining" in v:
+                            quota = int(v["remaining"])
+                            break
+            except Exception:
+                pass
+            if quota is not None:
+                data["quota_remaining"] = quota
             if not data.get("status"):
                 logger.warning("Fonnte send failed target=%s detail=%s", phone[-4:], data)
             return data
     except Exception as e:  # network / DNS / timeout
         logger.warning("Fonnte exception target=%s err=%s", phone[-4:], e)
         return {"status": False, "detail": str(e)}
+
+
+async def fetch_device_info() -> dict:
+    """Call Fonnte /device endpoint to fetch device + quota info.
+    Returns {} on failure."""
+    if not _enabled():
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://api.fonnte.com/device",
+                headers={"Authorization": os.environ["FONNTE_API_TOKEN"]},
+            )
+            return resp.json()
+    except Exception as e:
+        logger.warning("Fonnte device check failed: %s", e)
+        return {}
 
 
 async def send_whatsapp_many(targets: list[str], message: str, delay: str = "2") -> dict:
