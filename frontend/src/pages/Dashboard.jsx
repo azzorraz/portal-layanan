@@ -57,6 +57,7 @@ export default function Dashboard() {
     { name: "Hampir Terlambat", value: stats.sla.almost },
     { name: "Terlambat", value: stats.sla.late },
   ];
+  const slaTotal = slaData.reduce((a, b) => a + b.value, 0);
 
   return (
     <div className="space-y-8">
@@ -112,14 +113,21 @@ export default function Dashboard() {
           <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-zinc-500">SLA Monitoring</div>
           <h3 className="font-display text-lg font-medium tracking-tight">Status SLA Berjalan</h3>
           <div className="h-48 mt-2" data-testid="sla-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={slaData} dataKey="value" innerRadius={36} outerRadius={64} paddingAngle={2}>
-                  {slaData.map((_, i) => <Cell key={i} fill={SLOT_COLORS[i]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e4e4e7", fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {slaTotal > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={slaData} dataKey="value" innerRadius={36} outerRadius={64} paddingAngle={2}>
+                    {slaData.map((_, i) => <Cell key={i} fill={SLOT_COLORS[i]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e4e4e7", fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                <Clock className="h-6 w-6 text-zinc-300 mb-2" />
+                <div className="text-xs text-zinc-500">Tidak ada pengajuan berjalan</div>
+              </div>
+            )}
           </div>
           <div className="space-y-2 mt-2">
             {slaData.map((s, i) => (

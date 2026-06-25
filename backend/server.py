@@ -376,6 +376,21 @@ async def update_operator(uid: str, payload: OperatorUpdate, _: dict = Depends(r
         data["email"] = data["email"].lower()
     update.update(data)
     update["updated_at"] = iso(now_utc())
+    if "sekolah_id" in update and update["sekolah_id"]:
+        clash = await db.users.find_one({
+            "role": "operator",
+            "sekolah_id": update["sekolah_id"],
+            "_id": {"$ne": ObjectId(uid)},
+        })
+        if clash:
+            raise HTTPException(status_code=400, detail="Sekolah ini sudah memiliki akun operator")
+    if "email" in update and update["email"]:
+        clash = await db.users.find_one({
+            "email": update["email"],
+            "_id": {"$ne": ObjectId(uid)},
+        })
+        if clash:
+            raise HTTPException(status_code=400, detail="Email sudah terdaftar")
     await db.users.update_one({"_id": ObjectId(uid)}, {"$set": update})
     return doc_to_public(await db.users.find_one({"_id": ObjectId(uid)}))
 
