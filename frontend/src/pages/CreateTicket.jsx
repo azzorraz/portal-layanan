@@ -93,6 +93,8 @@ export default function CreateTicket() {
   const submit = async (e) => {
     e.preventDefault();
     if (!layananId) { toast.error("Pilih jenis layanan"); return; }
+    if (!judul.trim()) { toast.error("Judul pengajuan wajib diisi"); return; }
+    if (!deskripsi.trim()) { toast.error("Deskripsi wajib diisi"); return; }
     // validate required form fields from schema
     const schema = selectedLayanan?.form_schema || [];
     for (const f of schema) {
@@ -134,7 +136,7 @@ export default function CreateTicket() {
       </div>
 
       <Card className="border-zinc-200 shadow-none p-6">
-        <form onSubmit={submit} className="space-y-5" data-testid="create-ticket-form">
+        <form onSubmit={submit} noValidate className="space-y-5" data-testid="create-ticket-form">
           <div>
             <Label className="text-xs uppercase tracking-wider text-zinc-500">Jenis Layanan</Label>
             <Select value={layananId} onValueChange={setLayananId}>
