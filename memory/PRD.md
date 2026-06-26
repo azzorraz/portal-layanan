@@ -46,6 +46,20 @@ Aplikasi web modern untuk mengelola seluruh pengajuan layanan Dapodik dari Opera
 - ✅ Idempotent seed: existing operator password di-reset ke `123456` jika tidak match; admin koord baru auto-promoted; legacy koord auto-deactivated.
 - ✅ E2E test Phase 9: **23/23 backend pytest pass** (10 phase9 + 13 phase8 regression) + frontend flow 100%.
 
+## Implemented Phase 10 — Auto WA Notify ke Koordinator (2026-06-26)
+- ✅ Setiap pengajuan baru dari operator otomatis mengirim notifikasi WhatsApp ke seluruh nomor koordinator (default: `085728327595`).
+- ✅ Backend hook `notify_koordinator_wa()` di `POST /api/tickets` (non-blocking, exception-safe).
+- ✅ Template pesan khusus koord: ticket no, layanan, sekolah, operator, prioritas, SLA, judul + ajakan review (`fonnte.py::msg_ticket_created_koordinator`).
+- ✅ Source nomor: DB collection `system_settings._id="koord_wa"` (runtime-editable), fallback ke env `KOORDINATOR_WA_NUMBERS` saat seed pertama.
+- ✅ Admin endpoint: `GET /api/admin/koordinator-wa-numbers`, `PUT /api/admin/koordinator-wa-numbers` (koord-only).
+- ✅ UI tab baru **"Notifikasi WA"** di Master Data untuk add/remove nomor (`data-testid="tab-wa-notif"`).
+- ✅ Logging: setiap kiriman ke koord di-log ke `db.wa_logs` dengan `recipient_role="koordinator"`, terintegrasi dengan dashboard delivery stats.
+- ✅ E2E test Phase 10: **35/35 backend pytest pass** (12 phase10 + 23 regression) + frontend flow 100%.
+
+## Deployment Guides
+- `/app/DEPLOY.md` — Ubuntu Server bare (Nginx + Mongo + FastAPI + React).
+- `/app/DEPLOY_LAMPP.md` — Ubuntu Server dengan LAMPP eksisting (Apache pindah ke 8080, MongoDB paralel MySQL).
+
 ## Backlog (Next Phases)
 ### P1
 - Integrasi notifikasi WhatsApp + Email (Twilio/Resend) saat status berubah / revisi diminta.
