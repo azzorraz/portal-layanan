@@ -163,3 +163,21 @@ def msg_bulk_status(ticket: dict, new: str) -> str:
         f"No. Ticket: *{ticket.get('ticket_number')}*\n"
         f"Status terbaru: *{new}*"
     )
+
+
+def msg_ticket_created_koordinator(ticket: dict) -> str:
+    """Pesan WA ke koordinator saat ada pengajuan baru masuk dari operator."""
+    prioritas = ticket.get("prioritas") or "Normal"
+    operator_nama = ticket.get("operator_name") or ticket.get("operator_nama") or "-"
+    sekolah_nama = ticket.get("sekolah_nama") or "-"
+    return (
+        "*Portal Layanan Dapodik — Pengajuan Baru*\n"
+        f"No. Ticket: *{ticket.get('ticket_number')}*\n"
+        f"Layanan: {ticket.get('layanan_nama')}\n"
+        f"Sekolah: {sekolah_nama}\n"
+        f"Operator: {operator_nama}\n"
+        f"Prioritas: *{prioritas}*\n"
+        f"SLA: {ticket.get('sla_days')} hari kerja\n"
+        f"Judul: {_short(ticket.get('judul'), 100)}\n\n"
+        "Mohon segera direview di aplikasi Portal Layanan Dapodik."
+    )

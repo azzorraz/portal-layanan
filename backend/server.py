@@ -35,6 +35,7 @@ from fonnte import (
     msg_status_change,
     msg_new_comment,
     msg_bulk_status,
+    msg_ticket_created_koordinator,
     normalize_phone,
 )
 
@@ -474,6 +475,54 @@ async def notify_operator_wa(
     return res
 
 
+async def _koord_wa_numbers() -> list[str]:
+    """Read koordinator WA numbers list. Source priority:
+    1) MongoDB system_settings._id='koord_wa' field 'numbers' (list[str])
+    2) env KOORDINATOR_WA_NUMBERS (comma-separated) — used as initial seed.
+    """
+    doc = await db.system_settings.find_one({"_id": "koord_wa"})
+    if doc and isinstance(doc.get("numbers"), list):
+        return [str(n).strip() for n in doc["numbers"] if str(n).strip()]
+    raw = os.environ.get("KOORDINATOR_WA_NUMBERS", "")
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+async def notify_koordinator_wa(ticket: dict, event_type: str, message: str) -> list[dict]:
+    """Kirim WA ke daftar nomor koordinator (KOORDINATOR_WA_NUMBERS env).
+    Setiap kiriman di-log ke db.wa_logs dengan recipient_role='koordinator'.
+    Return: daftar response Fonnte per nomor."""
+    numbers = await _koord_wa_numbers()
+    if not numbers:
+        return []
+    ticket_id = str(ticket.get("_id")) if ticket.get("_id") else ticket.get("id")
+    results: list[dict] = []
+    for phone in numbers:
+        log_doc: dict = {
+            "ticket_id": ticket_id,
+            "ticket_number": ticket.get("ticket_number"),
+            "recipient_role": "koordinator",
+            "event_type": event_type,
+            "phone_last4": (normalize_phone(phone) or "")[-4:],
+            "created_at": iso(now_utc()),
+        }
+        res = await send_whatsapp(phone, message)
+        log_doc.update({
+            "status": bool(res.get("status")),
+            "detail": str(res.get("detail") or "")[:300],
+            "fonnte_requestid": res.get("requestid"),
+            "quota_remaining": res.get("quota_remaining"),
+            "skipped": bool(res.get("skipped")),
+        })
+        await db.wa_logs.insert_one(log_doc)
+        results.append(res)
+        if res.get("quota_remaining") is not None:
+            try:
+                await maybe_alert_low_quota(int(res["quota_remaining"]))
+            except Exception as e:
+                logger.warning("low quota alert failed: %s", e)
+    return results
+
+
 QUOTA_LOW_THRESHOLD = 50
 QUOTA_ALERT_COOLDOWN_HOURS = 6
 
@@ -863,6 +912,12 @@ async def create_ticket(payload: TicketCreate, user: dict = Depends(get_current_
         await notify_operator_wa(saved, "created", msg_ticket_created(saved))
     except Exception as e:
         logger.warning("WA notify (created) failed: %s", e)
+
+    # WhatsApp notification to koordinator (fixed numbers via env KOORDINATOR_WA_NUMBERS)
+    try:
+        await notify_koordinator_wa(saved, "new_ticket", msg_ticket_created_koordinator(saved))
+    except Exception as e:
+        logger.warning("WA notify koordinator (new ticket) failed: %s", e)
 
     return enriched
 
@@ -1484,6 +1539,37 @@ async def update_preferences(payload: WaPreferenceIn, user: dict = Depends(get_c
     return {"ok": True, "wa_opt_out": bool(fresh.get("wa_opt_out")), "phone": fresh.get("phone")}
 
 
+@api.get("/admin/koordinator-wa-numbers")
+async def get_koord_wa_numbers(user: dict = Depends(require_role("koordinator"))):
+    """Daftar nomor WA koordinator yang akan menerima notifikasi setiap pengajuan baru."""
+    numbers = await _koord_wa_numbers()
+    return {"numbers": numbers}
+
+
+class KoordWaNumbersIn(BaseModel):
+    numbers: List[str]
+
+
+@api.put("/admin/koordinator-wa-numbers")
+async def set_koord_wa_numbers(payload: KoordWaNumbersIn, user: dict = Depends(require_role("koordinator"))):
+    """Update daftar nomor WA koordinator. Setiap pengajuan baru dari operator
+    akan otomatis mengirim notifikasi WhatsApp ke semua nomor dalam daftar ini."""
+    cleaned: List[str] = []
+    for n in payload.numbers:
+        norm = normalize_phone(n)
+        if norm and len(norm) >= 9:
+            cleaned.append(norm)
+    # de-dupe preserving order
+    seen = set()
+    unique = [n for n in cleaned if not (n in seen or seen.add(n))]
+    await db.system_settings.update_one(
+        {"_id": "koord_wa"},
+        {"$set": {"numbers": unique, "updated_at": iso(now_utc()), "updated_by": user["id"]}},
+        upsert=True,
+    )
+    return {"ok": True, "numbers": unique}
+
+
 @api.post("/admin/test-whatsapp")
 async def admin_test_wa(payload: WhatsAppTestIn, user: dict = Depends(require_role("koordinator"))):
     """Send a test WhatsApp message to verify Fonnte connectivity."""
@@ -2015,6 +2101,21 @@ async def seed():
             await db.users.update_one(
                 {"_id": existing_op["_id"]},
                 {"$set": {"password_hash": hash_password(operator_default_pass)}},
+            )
+
+    # Seed koordinator WA numbers from env (only if DB belum punya)
+    if not await db.system_settings.find_one({"_id": "koord_wa"}):
+        env_numbers = [p.strip() for p in os.environ.get("KOORDINATOR_WA_NUMBERS", "").split(",") if p.strip()]
+        if env_numbers:
+            cleaned = []
+            for n in env_numbers:
+                norm = normalize_phone(n)
+                if norm:
+                    cleaned.append(norm)
+            await db.system_settings.update_one(
+                {"_id": "koord_wa"},
+                {"$set": {"numbers": cleaned, "updated_at": iso(now_utc()), "updated_by": "seed"}},
+                upsert=True,
             )
 
     logger.info("Seed complete")
