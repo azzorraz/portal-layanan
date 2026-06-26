@@ -469,12 +469,121 @@ export default function MasterData() {
           <TabsTrigger value="sekolah" data-testid="tab-sekolah">Sekolah</TabsTrigger>
           <TabsTrigger value="operator" data-testid="tab-operator">Operator</TabsTrigger>
           <TabsTrigger value="kecamatan" data-testid="tab-kecamatan">Kecamatan</TabsTrigger>
+          <TabsTrigger value="wa" data-testid="tab-wa-notif">Notifikasi WA</TabsTrigger>
         </TabsList>
         <TabsContent value="layanan" className="mt-4"><LayananTab /></TabsContent>
         <TabsContent value="sekolah" className="mt-4"><SekolahTab /></TabsContent>
         <TabsContent value="operator" className="mt-4"><OperatorTab /></TabsContent>
         <TabsContent value="kecamatan" className="mt-4"><KecamatanTab /></TabsContent>
+        <TabsContent value="wa" className="mt-4"><KoordWaNumbersTab /></TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function KoordWaNumbersTab() {
+  const [numbers, setNumbers] = useState([]);
+  const [newNumber, setNewNumber] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    try {
+      const { data } = await api.get("/admin/koordinator-wa-numbers");
+      setNumbers(data.numbers || []);
+    } catch (e) { toast.error(apiError(e)); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async (nextList) => {
+    setBusy(true);
+    try {
+      const { data } = await api.put("/admin/koordinator-wa-numbers", { numbers: nextList });
+      setNumbers(data.numbers || []);
+      toast.success("Daftar nomor diperbarui");
+    } catch (e) { toast.error(apiError(e)); }
+    finally { setBusy(false); }
+  };
+
+  const addNumber = async (e) => {
+    e.preventDefault();
+    const trimmed = newNumber.trim();
+    if (!trimmed) return;
+    const digits = trimmed.replace(/\D/g, "");
+    if (digits.length < 9) { toast.error("Nomor terlalu pendek (min. 9 digit)"); return; }
+    if (numbers.includes(digits)) { toast.error("Nomor sudah ada di daftar"); return; }
+    await save([...numbers, digits]);
+    setNewNumber("");
+  };
+
+  const removeNumber = async (n) => {
+    if (!window.confirm(`Hapus nomor ${n} dari daftar notifikasi?`)) return;
+    await save(numbers.filter((x) => x !== n));
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-zinc-200 shadow-none p-4">
+        <div className="flex items-start gap-3 mb-4 pb-4 border-b border-zinc-100">
+          <div className="h-9 w-9 rounded-md bg-blue-50 text-blue-600 inline-flex items-center justify-center flex-shrink-0">
+            <Send className="h-4 w-4" />
+          </div>
+          <div className="text-sm text-zinc-700">
+            <div className="font-medium text-zinc-900 mb-0.5">Notifikasi WhatsApp ke Koordinator</div>
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              Setiap pengajuan baru dari operator akan otomatis mengirim notifikasi WhatsApp ke <strong>semua nomor</strong> di daftar ini.
+              Format: nomor lokal (cth. <span className="font-mono">085728327595</span>) — kode negara akan ditambahkan otomatis.
+            </p>
+          </div>
+        </div>
+        <form onSubmit={addNumber} className="flex items-end gap-3" data-testid="koord-wa-add-form">
+          <div className="flex-1">
+            <Label className="text-xs uppercase tracking-wider text-zinc-500">Tambah Nomor WhatsApp</Label>
+            <Input
+              value={newNumber}
+              onChange={(e) => setNewNumber(e.target.value)}
+              placeholder="085728327595"
+              inputMode="numeric"
+              className="h-10 mt-1"
+              data-testid="koord-wa-input"
+            />
+          </div>
+          <Button type="submit" disabled={busy} className="bg-blue-600 hover:bg-blue-700" data-testid="add-koord-wa-button">
+            <Plus className="h-4 w-4 mr-1.5" />Tambah
+          </Button>
+        </form>
+      </Card>
+
+      <Card className="border-zinc-200 shadow-none">
+        <table className="w-full text-sm">
+          <thead><tr className="bg-zinc-50 border-b border-zinc-200">
+            <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Nomor WhatsApp</th>
+            <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500 w-32">Status</th>
+            <th className="px-4 py-3 w-16"></th>
+          </tr></thead>
+          <tbody>
+            {numbers.map((n) => (
+              <tr key={n} className="border-b border-zinc-100" data-testid={`koord-wa-row-${n}`}>
+                <td className="px-4 py-3 font-mono text-zinc-900">{n}</td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Aktif
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={() => removeNumber(n)} className="text-zinc-400 hover:text-red-600" data-testid={`del-koord-wa-${n}`}>
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {numbers.length === 0 && (
+              <tr><td colSpan={3} className="px-4 py-10 text-center text-zinc-500">
+                Belum ada nomor koordinator. Tambahkan nomor di atas agar notifikasi pengajuan baru terkirim.
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }

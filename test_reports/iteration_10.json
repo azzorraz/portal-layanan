@@ -1,0 +1,35 @@
+{
+  "summary": "Phase 10 (auto WA notify to koordinator on new ticket + GET/PUT /api/admin/koordinator-wa-numbers admin endpoint + Master Data 'Notifikasi WA' tab) verified end-to-end. Backend: 12/12 new pytest tests in /app/backend/tests/test_phase10_koord_wa.py PASS — koord+operator login regression, GET koord-wa returns seeded ['085728327595'] for koord and 403 for operator, PUT 403 for operator, PUT update list (de-dupe, length-filter <9 digits, restore default), live ticket creation as operator returns 200 AND async-fires Fonnte WA to koord (executive/whatsapp-stats reachable as koord), Phase 8 regression attachment_required=true with no attachments → 400, empty koord_wa list does NOT break ticket creation (only skips WA). Regression: full Phase 9 + attachment_required suites still 23/23 PASS. Frontend live on https://dapodik-approval.preview.emergentagent.com: tab-wa-notif visible in /master Tabs (5th tab) for koord; clicking it renders KoordWaNumbersTab with explanation card, data-testid='koord-wa-add-form' form, data-testid='koord-wa-input', data-testid='add-koord-wa-button' (computed bg rgb(37,99,235)=blue-600), and table with row data-testid='koord-wa-row-085728327595' present (env-seeded); adding '081234567899' → new row koord-wa-row-081234567899 appears + toast 'Daftar nomor diperbarui'; submitting '123' → toast error 'Nomor terlalu pendek (min. 9 digit)'; delete icon click triggers window.confirm and after accept the row disappears while default 085728327595 stays.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase10_koord_wa.py",
+    "/app/test_reports/pytest/phase10_results.xml"
+  ],
+  "action_items": [
+    "(none) — All Phase 10 review_request items pass."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:478 _koord_wa_numbers() reads system_settings._id='koord_wa' then falls back to env. Single source of truth ✓. Note: function is async and awaited only at request-time (POST /api/tickets hook + GET/PUT admin endpoint) — no blocking startup cost.",
+    "/app/backend/server.py:490-523 notify_koordinator_wa() wraps each send in a per-number wa_logs insert with recipient_role='koordinator'. log_doc.update happens AFTER send_whatsapp returns — if send raises, no log row is written. Acceptable, but consider try/except around send_whatsapp to ensure log_doc is always written (could be useful for debugging silent fails). Caller in create_ticket already wraps in try/except so a hard exception is swallowed.",
+    "/app/backend/server.py:1553-1570 PUT /admin/koordinator-wa-numbers normalizes (normalize_phone) and length-filters (>=9 digits) before de-dupe with order preserved using a set+walrus-like `seen.add` side effect. Works. The de-dupe inside list comprehension is correct because `seen.add()` returns None which is falsy; reviewers should add a brief comment for clarity.",
+    "/app/backend/server.py:2107-2119 Startup seed for koord_wa is GUARDED by `not await db.system_settings.find_one(...)` — idempotent; subsequent PUT writes persist and won't be clobbered. Good.",
+    "/app/backend/fonnte.py:168-183 msg_ticket_created_koordinator() template uses ticket.get('operator_name') OR ticket.get('operator_nama'). Defensive fallback ✓. The saved ticket from create_ticket has 'operator_name' (via _enrich_one not applied to `saved` — it's applied to `enriched` returned to client). Check whether `saved` doc contains operator_name. If not, the WA template will show '-' for operator. Verify by inspecting db.tickets fields after create.",
+    "/app/frontend/src/pages/MasterData.jsx:484-589 KoordWaNumbersTab is self-contained, calls /admin/koordinator-wa-numbers via api wrapper. Client-side validation length>=9 mirrors backend. window.confirm() is used for delete — acceptable for admin tool; could be upgraded to AlertDialog later.",
+    "Phase 9 carry-over still applies: server.py is 2143 lines — modular split still pending."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase10_koord_wa.py (NEW — 12 tests, all passing). Note: uses module-scoped tokens via plain `requests.post` (NOT a shared Session) because backend sets an httpOnly 'access_token' cookie on /api/auth/login — a shared Session would carry the LAST login's cookie which (in FastAPI auth.py:_extract_token) takes precedence over the per-request Authorization header. Documented inline."
+  ],
+  "success_rate": {"backend": "100% (12/12 phase10 + 23/23 phase9+phase8 regression = 35/35)", "frontend": "100% of Phase 10 review_request UI bullets"},
+  "test_credentials": "Koord: admin@dapodik.id / admin123. Operator: NPSN 20220001 / 123456.",
+  "seed_data_creation": "Two test tickets created with judul prefix 'TEST_PHASE10' to verify WA hook + empty-list safety. Both cleaned up by /api/admin/cleanup-test-tickets at module teardown. wa_logs rows NOT explicitly cleaned (cleanup endpoint only handles tickets/activities/attachments/notifications). Recommend extending cleanup endpoint to also delete wa_logs by ticket_number prefix to avoid growth.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 10 done. Important: backend login (POST /api/auth/login) sets httpOnly cookie `access_token`; if you reuse a requests.Session across two different logins in the same test file, the LAST cookie wins and overrides Authorization headers from earlier-fetched tokens. Solution: use plain requests.post(...) (no session) for each login fixture and pass Authorization explicitly per-request. New endpoint /api/admin/koordinator-wa-numbers (GET/PUT) is koord-only and persists to db.system_settings._id='koord_wa'. Env KOORDINATOR_WA_NUMBERS in /app/backend/.env is only used as the FIRST-RUN seed; runtime source of truth is DB. Frontend tab is data-testid='tab-wa-notif' in /master. Fonnte is LIVE — keep WA-firing test tickets to ≤2 and always cleanup.",
+  "rca of the issue": "N/A — no functional issues. One testing-infra observation: initial pytest run failed with 403 'Akses ditolak' on all PUT calls. RCA: backend sets httpOnly 'access_token' cookie on /api/auth/login. The test used a shared requests.Session for both koord+operator logins; after operator_token fixture logged in, the session's cookie jar held the operator's access_token. /api/admin/koordinator-wa-numbers PUT then evaluated cookie-auth (operator) → require_role('koordinator') → 403, even though Authorization: Bearer <koord> header was set per-request. Backend's auth._extract_token prefers cookie over header (or both happen to resolve to operator). Fixed in test by switching fixtures to plain requests.post and never sharing a Session for cross-role calls."
+}
