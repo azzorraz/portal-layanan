@@ -7,7 +7,7 @@ Stack: FastAPI (Python 3.11) + React 19 + MongoDB 7 + Nginx (reverse proxy + SSL
 
 ## 0. Asumsi & Persiapan
 
-- Domain sudah pointing ke IP server (cth. `dapodik.sekolah.id` → A record ke IP server).
+- Domain sudah pointing ke IP server (cth. `portal-layanan.ambada.my.id` → A record ke IP server).
 - User non-root dengan sudo (`useradd -m -s /bin/bash dapodik && usermod -aG sudo dapodik`).
 - Akses SSH ke server.
 - Code aplikasi sudah ada di GitHub atau bisa di-`scp` ke server.
@@ -59,7 +59,7 @@ mongosh <<EOF
 use admin
 db.createUser({
   user: "dapodik_admin",
-  pwd: "GANTI_PASSWORD_KUAT_DISINI",
+  pwd: "admin123",
   roles: [ { role: "userAdminAnyDatabase", db: "admin" }, "readWriteAnyDatabase" ]
 })
 EOF
@@ -100,7 +100,7 @@ sudo chown $USER:$USER /var/www
 cd /var/www
 
 # Opsi A: dari GitHub
-git clone https://github.com/USERNAME/portal-layanan-dapodik.git portal-dapodik
+git clone https://github.com/azzorraz/portal-layanan-dapodik.git portal-dapodik
 
 # Opsi B: dari lokal (jalankan di mesin lokal)
 # scp -r /app/* user@server:/var/www/portal-dapodik/
@@ -138,14 +138,14 @@ nano /var/www/portal-dapodik/backend/.env
 
 Isi:
 ```env
-MONGO_URL="mongodb://dapodik_admin:GANTI_PASSWORD_KUAT_DISINI@localhost:27017/?authSource=admin"
+MONGO_URL="mongodb://dapodik_admin:admin123@localhost:27017/?authSource=admin"
 DB_NAME="dapodik_ticketing"
-CORS_ORIGINS="https://dapodik.sekolah.id"
+CORS_ORIGINS="portal-layanan.ambada.my.id"
 JWT_SECRET="GENERATE_RANDOM_64_HEX_STRING_DISINI"
 ADMIN_EMAIL="admin@dapodik.id"
 ADMIN_PASSWORD="admin123"
 OPERATOR_DEFAULT_PASSWORD="123456"
-FONNTE_API_TOKEN="ISI_JIKA_PAKAI_WHATSAPP"
+FONNTE_API_TOKEN="W3dzvx3AWbkYFrCxP8v2"
 FONNTE_COUNTRY_CODE="62"
 FONNTE_ENABLED="true"
 ```
@@ -204,7 +204,7 @@ sudo systemctl status dapodik-backend
 cd /var/www/portal-dapodik/frontend
 
 # Set backend URL untuk build production
-echo 'REACT_APP_BACKEND_URL=https://dapodik.sekolah.id' > .env
+echo 'REACT_APP_BACKEND_URL=portal-layanan.ambada.my.id' > .env
 
 # Install deps & build
 yarn install --frozen-lockfile
@@ -229,7 +229,7 @@ Isi:
 ```nginx
 server {
     listen 80;
-    server_name dapodik.sekolah.id;
+    server_name portal-layanan.ambada.my.id;
 
     # Static frontend
     root /var/www/portal-dapodik/frontend/build;
@@ -275,7 +275,7 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-Test akses HTTP: `http://dapodik.sekolah.id`
+Test akses HTTP: `portal-layanan.ambada.my.id`
 
 ---
 
@@ -283,7 +283,7 @@ Test akses HTTP: `http://dapodik.sekolah.id`
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d dapodik.sekolah.id
+sudo certbot --nginx -d portal-layanan.ambada.my.id
 # Ikuti prompt: email, agree TOS, redirect HTTP→HTTPS = Yes
 ```
 
@@ -296,7 +296,7 @@ sudo certbot renew --dry-run
 
 ## 9. Verifikasi Akhir
 
-1. Buka `https://dapodik.sekolah.id` di browser → halaman login muncul.
+1. Buka `portal-layanan.ambada.my.id` di browser → halaman login muncul.
 2. Login koordinator: `admin@dapodik.id` / `admin123` → masuk dashboard pimpinan.
 3. Login operator: NPSN `20220001` / `123456` → masuk dashboard operator.
 4. Test buat tiket dengan attachment.
@@ -353,7 +353,7 @@ df -h  # cek disk
 |---|---|
 | Halaman blank / 502 Bad Gateway | `sudo systemctl status dapodik-backend` + `journalctl -u dapodik-backend -n 50` |
 | Login 401 padahal kredensial benar | Pastikan `JWT_SECRET` di .env stabil, dan `mongod` aktif |
-| CORS error di browser | Set `CORS_ORIGINS="https://dapodik.sekolah.id"` di .env, restart backend |
+| CORS error di browser | Set `CORS_ORIGINS="portal-layanan.ambada.my.id"` di .env, restart backend |
 | Frontend tidak update setelah deploy | `yarn build` ulang + hard refresh browser (Ctrl+Shift+R) |
 | Upload file gagal | `client_max_body_size` di nginx + cek disk space |
 | Backend tidak konek Mongo | Test: `mongosh "mongodb://dapodik_admin:PASS@localhost:27017/?authSource=admin"` |
