@@ -266,14 +266,17 @@ export default function TicketsList() {
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Status</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Prioritas</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">SLA</th>
+                {isKoor && (
+                  <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">Export</th>
+                )}
               </tr>
             </thead>
             <tbody data-testid="tickets-table-body">
               {loading && (
-                <tr><td colSpan={isKoor ? 8 : 6} className="px-4 py-12 text-center text-zinc-500">Memuat...</td></tr>
+                <tr><td colSpan={isKoor ? 9 : 6} className="px-4 py-12 text-center text-zinc-500">Memuat...</td></tr>
               )}
               {!loading && items.length === 0 && (
-                <tr><td colSpan={isKoor ? 8 : 6} className="px-4 py-16 text-center">
+                <tr><td colSpan={isKoor ? 9 : 6} className="px-4 py-16 text-center">
                   <div className="text-zinc-500 text-sm">Belum ada pengajuan</div>
                   {user?.role === "operator" && (
                     <Button asChild className="mt-3 bg-blue-600 hover:bg-blue-700" size="sm">
@@ -316,6 +319,26 @@ export default function TicketsList() {
                   <td className="px-4 py-3"><StatusBadge status={t.status} testId={`row-status-${t.ticket_number}`} /></td>
                   <td className="px-4 py-3"><PriorityBadge priority={t.prioritas} /></td>
                   <td className="px-4 py-3"><SlaBadge state={t.sla_state} testId={`row-sla-${t.ticket_number}`} /></td>
+                  {isKoor && (
+                    <td className="px-4 py-3 text-center">
+                      <a
+                        href={`${import.meta.env.VITE_API_URL || ""}/api/tickets/${t.id}/export-excel`}
+                        download
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 transition-colors"
+                        data-testid={`export-excel-${t.ticket_number}`}
+                      >
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                          <line x1="8" y1="13" x2="10" y2="13" />
+                          <line x1="14" y1="13" x2="16" y2="13" />
+                          <line x1="8" y1="17" x2="10" y2="17" />
+                          <line x1="14" y1="17" x2="16" y2="17" />
+                        </svg>
+                        Excel
+                      </a>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

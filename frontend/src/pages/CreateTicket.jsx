@@ -52,12 +52,16 @@ export default function CreateTicket() {
   const [checklistState, setChecklistState] = useState([]);
   const [formData, setFormData] = useState({});
 
-  // Readonly prefill — values shown disabled (auto-filled from account)
+  // Readonly prefill — values shown disabled (auto-filled from account / upload)
+  const firstFileName = files.length > 0 ? files[0].name : "";
+  const sekolahNama = user?.sekolah?.nama || "";
   const prefill = useMemo(() => ({
-    nama_sekolah: user?.sekolah?.nama || "",
+    nama_sekolah: sekolahNama,
     npsn: user?.sekolah?.npsn || "",
     npsn_npyp: user?.sekolah?.npsn || "",
-  }), [user]);
+    unit_kerja_asal: sekolahNama,
+    ...(firstFileName ? { upload_sk_ktp: firstFileName } : {}),
+  }), [user, firstFileName, sekolahNama]);
 
   // Initial seed values — populated but editable (e.g., Nama Operator)
   const initialValues = useMemo(() => ({
@@ -80,7 +84,18 @@ export default function CreateTicket() {
       }
     }
     setFormData(seeded);
-  }, [layananId, selectedLayanan, initialValues]);
+    // auto-fill judul based on selected layanan
+    if (selectedLayanan?.nama) {
+      setJudul(`${selectedLayanan.nama} — ${prefill.nama_sekolah}`);
+    } else {
+      setJudul("");
+    }
+  }, [layananId, selectedLayanan, initialValues, prefill]);
+
+  // sync upload_sk_ktp filename to/from formData when files change
+  useEffect(() => {
+    setFormData((prev) => ({ ...prev, upload_sk_ktp: firstFileName }));
+  }, [firstFileName]);
 
   const toggleChecklist = (i) => {
     setChecklistState((prev) => prev.map((c, idx) => (idx === i ? { ...c, checked: !c.checked } : c)));

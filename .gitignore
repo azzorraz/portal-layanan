@@ -93,3 +93,5 @@ frontend/node_modules/.cache/default-development/16.pack
 credentials.json
 *.key
 .credentials
+*.backup
+yarn.lock

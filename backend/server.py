@@ -617,10 +617,21 @@ async def login(payload: LoginIn, response: Response):
         key="access_token", value=token, httponly=True, secure=False, samesite="lax",
         max_age=12 * 3600, path="/",
     )
+    # enrich with school for operator
+    user_pub = doc_to_public(user)
+    if user_pub.get("sekolah_id"):
+        try:
+            s = await db.sekolah.find_one({"_id": ObjectId(user_pub["sekolah_id"])})
+            if s:
+                user_pub["sekolah"] = doc_to_public(s)
+        except Exception:
+            pass
     return {
         "token": token,
-        "user": doc_to_public(user),
+        "user": user_pub,
     }
+
+
 
 
 @api.post("/auth/logout")
@@ -1866,6 +1877,113 @@ def _build_ticket_filter(
     if kecamatan:
         filt["kecamatan"] = kecamatan
     return filt
+
+
+@api.get("/tickets/{tid}/export-excel")
+async def export_ticket_excel(
+    tid: str,
+    user: dict = Depends(require_role("koordinator")),
+):
+    """Export a single ticket's form data to Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    t = await db.tickets.find_one({"_id": ObjectId(tid)})
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket tidak ditemukan")
+
+    layanan = await db.services.find_one({"_id": ObjectId(t["layanan_id"])}) if t.get("layanan_id") else None
+    schema = (layanan or {}).get("form_schema", [])
+    form_data = t.get("form_data") or {}
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = t.get("ticket_number", "Ticket")
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill("solid", fgColor="09090B")
+    label_font = Font(bold=True, size=10)
+    cell_font = Font(size=10)
+    thin_border = Border(
+        left=Side(style="thin", color="D0D0D0"),
+        right=Side(style="thin", color="D0D0D0"),
+        top=Side(style="thin", color="D0D0D0"),
+        bottom=Side(style="thin", color="D0D0D0"),
+    )
+
+    # Title
+    ws.merge_cells("A1:B1")
+    ws["A1"] = f"Formulir Pengajuan — {t.get('ticket_number', '')}"
+    ws["A1"].font = Font(bold=True, size=14)
+    ws["A1"].alignment = Alignment(horizontal="center")
+    ws.row_dimensions[1].height = 30
+
+    # General info section
+    general_info = [
+        ("No. Ticket", t.get("ticket_number", "-")),
+        ("Judul", t.get("judul", "-")),
+        ("Jenis Layanan", t.get("layanan_nama", "-")),
+        ("Sekolah", t.get("sekolah_nama", "-")),
+        ("Kecamatan", t.get("kecamatan", "-")),
+        ("Operator", t.get("operator_name", "-")),
+        ("Status", t.get("status", "-")),
+        ("Prioritas", t.get("prioritas", "-")),
+        ("Tanggal Pengajuan", (t.get("submitted_at") or "")[:10]),
+    ]
+
+    row = 3
+    ws.cell(row=row, column=1, value="Informasi Umum").font = header_font
+    ws.cell(row=row, column=1).fill = header_fill
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
+    ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
+    row += 1
+
+    for label, val in general_info:
+        ws.cell(row=row, column=1, value=label).font = label_font
+        ws.cell(row=row, column=1).border = thin_border
+        ws.cell(row=row, column=2, value=val).font = cell_font
+        ws.cell(row=row, column=2).border = thin_border
+        row += 1
+
+    # Form data section
+    if schema or form_data:
+        row += 1
+        ws.cell(row=row, column=1, value="Data Formulir").font = header_font
+        ws.cell(row=row, column=1).fill = header_fill
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
+        ws.cell(row=row, column=1).alignment = Alignment(horizontal="center")
+        row += 1
+
+        # Build label->key mapping from schema
+        label_map = {f["key"]: f["label"] for f in schema if isinstance(f, dict)}
+
+        if form_data:
+            for key, val in form_data.items():
+                label = label_map.get(key, key.replace("_", " ").title())
+                display_val = str(val) if val is not None else "-"
+                ws.cell(row=row, column=1, value=label).font = label_font
+                ws.cell(row=row, column=1).border = thin_border
+                ws.cell(row=row, column=2, value=display_val).font = cell_font
+                ws.cell(row=row, column=2).border = thin_border
+                row += 1
+        else:
+            ws.cell(row=row, column=1, value="Tidak ada data formulir").font = cell_font
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
+            row += 1
+
+    # Column widths
+    ws.column_dimensions["A"].width = 36
+    ws.column_dimensions["B"].width = 50
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"formulir-{t.get('ticket_number', 'ticket')}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @api.get("/reports/excel")

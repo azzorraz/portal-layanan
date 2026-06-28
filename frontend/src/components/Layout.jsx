@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Ticket, FileBarChart2, Settings2, LogOut, PlusCircle, KeyRound, ChevronDown,
-  Crown, BookOpen, ShieldCheck,
+  Crown, BookOpen, ShieldCheck, ChevronLeft, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import NotificationsBell from "@/components/NotificationsBell";
 import {
@@ -12,18 +13,19 @@ import {
 const linkBase =
   "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors";
 
-function SideLink({ to, icon: Icon, label, testId, end }) {
+function SideLink({ to, icon: Icon, label, testId, end, collapsed }) {
   return (
     <NavLink
       to={to}
       end={end}
       data-testid={testId}
       className={({ isActive }) =>
-        `${linkBase} ${isActive ? "bg-blue-600 text-white" : "text-zinc-700 hover:bg-blue-50 hover:text-blue-700"}`
+        `${linkBase} ${isActive ? "bg-blue-600 text-white" : "text-zinc-700 hover:bg-blue-50 hover:text-blue-700"} ${collapsed ? "justify-center px-2" : ""}`
       }
+      title={collapsed ? label : undefined}
     >
-      <Icon className="h-4 w-4" />
-      <span>{label}</span>
+      <Icon className="h-4 w-4 shrink-0" />
+      {!collapsed && <span>{label}</span>}
     </NavLink>
   );
 }
@@ -31,6 +33,7 @@ function SideLink({ to, icon: Icon, label, testId, end }) {
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
 
   const isKoor = user?.role === "koordinator";
   const initials = (user?.name || user?.email || "?")
@@ -40,48 +43,68 @@ export default function Layout() {
     .join("")
     .toUpperCase();
 
+  const sidebarWidth = collapsed ? "md:w-16" : "md:w-64";
+
   return (
     <div className="min-h-screen flex bg-[#FAFAFA]">
       {/* Sidebar */}
-      <aside className="hidden md:flex md:w-64 flex-col border-r border-zinc-200 bg-white">
-        <div className="h-16 flex items-center px-5 border-b border-zinc-200">
+      <aside className={`hidden md:flex ${sidebarWidth} flex-col border-r border-zinc-200 bg-white transition-all duration-200`}>
+        <div className="h-16 flex items-center px-3 border-b border-zinc-200">
           <Link to="/dashboard" className="flex items-center gap-2" data-testid="sidebar-brand">
-            <div className="h-7 w-7 rounded-md bg-blue-600 text-white inline-flex items-center justify-center text-[11px] font-bold tracking-tighter">
+            <div className="h-7 w-7 rounded-md bg-blue-600 text-white inline-flex items-center justify-center text-[11px] font-bold tracking-tighter shrink-0">
               DP
             </div>
-            <div className="flex flex-col leading-tight">
-              <span className="font-display text-sm font-semibold text-zinc-900">Portal Layanan</span>
-              <span className="text-[10px] uppercase tracking-[0.12em] text-blue-600 font-semibold">Dapodik</span>
-            </div>
+            {!collapsed && (
+              <div className="flex flex-col leading-tight">
+                <span className="font-display text-sm font-semibold text-zinc-900">Portal Layanan</span>
+                <span className="text-[10px] uppercase tracking-[0.12em] text-blue-600 font-semibold">Dapodik</span>
+              </div>
+            )}
           </Link>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <div className="px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400 font-semibold">Menu</div>
-          <SideLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard" />
-          <SideLink to="/tickets" icon={Ticket} label="Tickets" testId="nav-tickets" />
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-hidden">
+          {!collapsed && <div className="px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400 font-semibold">Menu</div>}
+          <SideLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" testId="nav-dashboard" collapsed={collapsed} />
+          <SideLink to="/tickets" icon={Ticket} label="Tickets" testId="nav-tickets" collapsed={collapsed} />
           {user?.role === "operator" && (
-            <SideLink to="/tickets/new" icon={PlusCircle} label="Buat Pengajuan" testId="nav-new-ticket" />
+            <SideLink to="/tickets/new" icon={PlusCircle} label="Buat Pengajuan" testId="nav-new-ticket" collapsed={collapsed} />
           )}
-          <SideLink to="/kb" icon={BookOpen} label="Knowledge Base" testId="nav-kb" />
-          {isKoor && <SideLink to="/reports" icon={FileBarChart2} label="Laporan" testId="nav-reports" />}
+          <SideLink to="/kb" icon={BookOpen} label="Pusat Informasi" testId="nav-kb" collapsed={collapsed} />
+          {isKoor && <SideLink to="/reports" icon={FileBarChart2} label="Laporan" testId="nav-reports" collapsed={collapsed} />}
           {isKoor && (
             <>
-              <div className="pt-4 px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400 font-semibold">
-                Admin
-              </div>
-              <SideLink to="/executive" icon={Crown} label="Dashboard Pimpinan" testId="nav-executive" />
-              <SideLink to="/master" icon={Settings2} label="Master Data" testId="nav-master" />
-              <SideLink to="/audit" icon={ShieldCheck} label="Log Aktivitas" testId="nav-audit" />
+              {!collapsed && (
+                <div className="pt-4 px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400 font-semibold">
+                  Admin
+                </div>
+              )}
+              <SideLink to="/executive" icon={Crown} label="Dashboard Pimpinan" testId="nav-executive" collapsed={collapsed} />
+              <SideLink to="/master" icon={Settings2} label="Master Data" testId="nav-master" collapsed={collapsed} />
+              <SideLink to="/audit" icon={ShieldCheck} label="Log Aktivitas" testId="nav-audit" collapsed={collapsed} />
             </>
           )}
         </nav>
 
-        <div className="border-t border-zinc-200 p-3 text-xs text-zinc-500">
-          <div className="px-2 py-1 leading-tight">
-            Logged in as
-            <div className="text-zinc-900 font-medium truncate">{user?.email}</div>
-          </div>
+        <div className="border-t border-zinc-200 p-2">
+          {!collapsed && (
+            <div className="px-2 py-1 text-xs text-zinc-500 leading-tight">
+              Logged in as
+              <div className="text-zinc-900 font-medium truncate">{user?.email}</div>
+            </div>
+          )}
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex items-center justify-center w-full mt-1.5 h-8 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
+            data-testid="sidebar-toggle"
+            title={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </aside>
 

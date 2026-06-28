@@ -49,7 +49,7 @@ export default function KnowledgeBase() {
       <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-semibold flex items-center gap-1.5">
-            <BookOpen className="h-3 w-3" /> Knowledge Base
+            <BookOpen className="h-3 w-3" /> Pusat Informasi
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">Pusat Pengetahuan & FAQ</h1>
           <p className="text-sm text-zinc-500 mt-1">Solusi cepat untuk pertanyaan umum dan panduan penggunaan layanan Dapodik.</p>
